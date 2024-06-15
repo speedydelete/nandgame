@@ -1361,7 +1361,7 @@ try:
     code = window.localStorage.getItem('ne.code')
     pos = int(window.localStorage.getItem('ne.pos'))
     folds = eval(window.localStorage.getItem('ne.folds'))
-except (KeyError, ValueError): 
+except (KeyError, ValueError, TypeError): 
     code = ''
     pos = 0
 set_code(code, pos)`);
