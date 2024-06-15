@@ -9,7 +9,7 @@
         <script>
             window.onload = async () => {
                 let pyodide = await loadPyodide();
-                pyodide.runPython(`
+                pyodide.runPython(String.raw`
 import traceback
 import html
 import re
