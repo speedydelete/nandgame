@@ -97,15 +97,15 @@ Max (O.3.1): 106 nands
 Multiplication (O.3.2): 2672 nands
 
 Unpack Floating-Point Value (O.4.1): 12 nands
-Floating-Point Multiplication (O.4.2): 106 nands, true 1943 nands
+Floating-Point Multiplication (O.4.2): 106 nands
 Normalize Overflow (O.4.3): 57 nands
 Verify Exponent (O.4.4): 41 nands
-Align Significands (O.4.5): 361 nands
+Align Significands (O.4.5): 327 nands
 Add Signed Magnitude (O.4.6): 198 nands
 Normalize Underflow (O.4.7): 207 nands
 Pack Floating-Point Value (O.4.8): 305 nands
 Floating-Point Multiplication (O.4.9): 435 nands
-Floating-Point Addition (O.4.10): 1051 nands
+Floating-Point Addition (O.4.10): 973 nands
 
 Timer Trigger (O.5.1): 91 nands
 Mode Controller (O.5.2): 15 nands
