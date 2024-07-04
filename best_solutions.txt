@@ -41,7 +41,7 @@ SOFTWARE:
 Machine Code (S.1.1): n/a
 Assembler Language (S.1.2): n/a
 Assembler Program (S.1.3): 4 instructions
-Keyboard Input (S.1.4): pass
+Keyboard Input (S.1.4): 13 instructions
 Escape Labyrinth (S.1.5): 11 instructions
 Display (S.1.6): 4 instructions
 Network (S.1.7): 22 instructions
