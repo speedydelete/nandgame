@@ -32,9 +32,10 @@ RAM (H.5.6): 152 nands
 
 Combined Memory (H.6.1): 98 nands, 38912 nands/kilobyte
 Instruction (H.6.2): 506 nands
-Control Unit (H.6.3): 561 nands
-Computer (H.6.4): 919 nands, 38912 nands/kilobyte
-Input And Output (H.6.5): 6 nands
+Control Selector (H.6.3): 61 nands
+Control Unit (H.6.4): 561 nands
+Computer (H.6.5): 919 nands, 38912 nands/kilobyte
+Input And Output (H.6.6): 6 nands
 
 SOFTWARE:
 
