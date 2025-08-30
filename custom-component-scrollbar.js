@@ -9,6 +9,8 @@
 // @grant        none
 // ==/UserScript==
 
+// This code is in the public domain
+
 (function() {
     const navButtons = document.querySelectorAll('button.nav-link');
     let ccButton;
