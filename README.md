@@ -15,4 +15,3 @@ H.2.1 - Half Adder - 5 nands, 5 components (trivial)
 H.2.2 - Full Adder - 9 nands, 9 components (trivial)  
 H.2.3 - Multi-bit Adder - 18 nands, 2 components (trivial)  
 H.2.4 - Increment - 75 nands, 75 components ()
-
