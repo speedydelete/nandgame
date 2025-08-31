@@ -143,12 +143,12 @@ The save file containing these is components.json.
 
 ## Information for users that hold records
 
-nttii - 9 records - https://www.reddit.com/user/nttii/
-CHEpachilo - 9 records - https://www.reddit.com/user/CHEpachilo/
-speedydelete - 9 records - https://speedydelete.com/, https://github.com/speedydelete/
-tctianchi - 6 records - https://reddit.com/user/tctianchi/, https://github.com/tctianchi/
-Sad_Courage_1564 - 5 records - https://www.reddit.com/user/Sad_Courage_1564/
-speedydelete's friend - 2 records - No online profile
-johndcochran - 1 record - https://www.reddit.com/user/johndcochran/
-AcalamityDev - 1 record - Cannot find an online profile
-kariya_mitsuru - 1 record - https://www.reddit.com/user/kariya_mitsuru/
+nttii - 9 records - https://www.reddit.com/user/nttii/  
+CHEpachilo - 9 records - https://www.reddit.com/user/CHEpachilo/  
+speedydelete - 9 records - https://speedydelete.com/, https://github.com/speedydelete/  
+tctianchi - 6 records - https://reddit.com/user/tctianchi/, https://github.com/tctianchi/  
+Sad_Courage_1564 - 5 records - https://www.reddit.com/user/Sad_Courage_1564/  
+speedydelete's friend - 2 records - No online profile  
+johndcochran - 1 record - https://www.reddit.com/user/johndcochran/  
+AcalamityDev - 1 record - Cannot find an online profile  
+kariya_mitsuru - 1 record - https://www.reddit.com/user/kariya_mitsuru/  
