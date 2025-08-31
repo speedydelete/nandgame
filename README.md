@@ -5,7 +5,6 @@ This contains the optimal known solutions for nandgame.com, as well as a userscr
 
 No records are given to people if they are too simple.
 
-\
 
 ## Best solutions by number of nands
 
@@ -131,18 +130,16 @@ O.5.2 - Mode controller - 12 nands, 12 components
 O.5.3 - Register with backup - 307 nands, 306 components (speedydelete)  
 O.5.4 - Program Counter - 431 nands, 51 components  
 O.5.5 - Register Bank - 1234 nands, 8 components (This version fixes a bug where user-mode processes can write to arbitrary registers, and therefore should be considered the optimal one, even though it uses more things than the "actually optimal" one.)  
-O.5.6 - General-purpose Memory - 499 nands, 495 components (speedydelete)
-O.5.7 - Virtual Memory - 20 nands, 20 components (speedydelete)
-O.5.8 - Control Unit - 969 nands, 453 components (speedydelete)
-O.5.9 - Processor - 1379 nands, 5 components
+O.5.6 - General-purpose Memory - 499 nands, 495 components (speedydelete)  
+O.5.7 - Virtual Memory - 20 nands, 20 components (speedydelete)  
+O.5.8 - Control Unit - 969 nands, 453 components (speedydelete)  
+O.5.9 - Processor - 1379 nands, 5 components  
 
-\
 
 ## Best solutions by number of components
 
 The save file containing these is components.json.
 
-\
 
 ## Information for users that hold records
 
