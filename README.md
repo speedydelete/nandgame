@@ -274,7 +274,7 @@ The save file containing these is cheaty.json.
 S.1.6 - Network - 4 instructions, 4 lines (AcalamityDev)  
 
 ### S.4 - Function calls
-*S.4.3 - Return - 2 lines, 9 instructions (nttii, this soluttion does not work when combined with the cheaty init stack solution, so it is marked incorrect in the save file)*  
+S.4.3 - Return - 2 lines, 9 instructions (nttii, this soluttion does not work when combined with the cheaty init stack solution, so it is marked incorrect in the save file)  
 
 
 ## Cheaty solutions by number of components/lines
