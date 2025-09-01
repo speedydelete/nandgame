@@ -6,7 +6,7 @@ This contains the optimal known solutions for nandgame.com, as well as a userscr
 No records are given to people if they are too simple.
 
 
-## Best solutions by number of nands
+## Best solutions by number of nands/instructions
 
 The save file containing these is save.json.
 
@@ -136,19 +136,19 @@ O.5.8 - Control Unit - 969 nands, 453 components (speedydelete)
 O.5.9 - Processor - 1379 nands, 5 components  
 
 
-## Best solutions by number of components
+## Best solutions by number of components/lines
 
 The save file containing these is components.json.
 
 
 ## Information for users that hold records
 
-nttii - 9 records - https://www.reddit.com/user/nttii/  
-CHEpachilo - 9 records - https://www.reddit.com/user/CHEpachilo/  
-speedydelete - 9 records - https://speedydelete.com/, https://github.com/speedydelete/  
-tctianchi - 6 records - https://reddit.com/user/tctianchi/, https://github.com/tctianchi/  
-Sad_Courage_1564 - 5 records - https://www.reddit.com/user/Sad_Courage_1564/  
-speedydelete's friend - 2 records - No online profile  
-johndcochran - 1 record - https://www.reddit.com/user/johndcochran/  
-AcalamityDev - 1 record - Cannot find an online profile  
-kariya_mitsuru - 1 record - https://www.reddit.com/user/kariya_mitsuru/  
+nttii - https://www.reddit.com/user/nttii/ - 9 records (1 nands, 8 instructions)  
+speedydelete - https://speedydelete.com/, https://github.com/speedydelete/ - 9 records (7 nands, 2 instructions)  
+CHEpachilo - https://www.reddit.com/user/CHEpachilo/ - 8 records (8 nands)  
+tctianchi - https://reddit.com/user/tctianchi/, https://github.com/tctianchi/ - 6 records (6 nands)  
+Sad_Courage_1564 - 5 records - https://www.reddit.com/user/Sad_Courage_1564/ - 5 records (5 components, 1 tokens)  
+speedydelete's friend - No online profile - 2 records (2 instructions)
+johndcochran - https://www.reddit.com/user/johndcochran/ - 1 record (1 nands)
+AcalamityDev - Cannot find an online profile - 1 record (1 instructions)
+kariya_mitsuru - https://www.reddit.com/user/kariya_mitsuru/ - 1 record (1 nands)
