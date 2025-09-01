@@ -61,7 +61,7 @@ S.1.5 - Display - 4 instructions, 4 lines (AcalamityDev)
 S.1.6 - Network - 22 instructions, 21 lines (nttii)  
 
 ### S.2 - Stack machine
-S.2.1 - Init Stack - 4 instructions, 4 lines  
+S.2.1 - Init stack - 4 instructions, 4 lines  
 S.2.2 - Push D - 4 instructions,  lines  
 S.2.3 - Pop D - 3 instructions, 3 lines  
 S.2.4 - Pop A - 3 instructions, 3 lines  
@@ -191,7 +191,7 @@ H.6.6 - Input and Output - 2 components, 65 nands
 *S.1.6 - Network - 21 lines, 22 instructions (nttii)*  
 
 ### S.2 - Stack machine
-*S.2.1 - Init Stack - 4 lines, 4 instructions*  
+*S.2.1 - Init stack - 4 lines, 4 instructions*  
 *S.2.2 - Push D - 4 lines, 4 instructions*  
 S.2.3 - Pop D - 2 lines, 4 instructions (AcalamityDev, dependant on pop.A)  
 *S.2.4 - Pop A - 3 lines, 3 instructions*  
@@ -266,14 +266,41 @@ O.5.8 - Control Unit - 18 components, 1050 nands
 *O.5.9 - Processor - 1379 nands, 5 components*  
 
 
+## Cheaty solutions by number of nands/instructions
+
+The save file containing these is cheaty.json.
+
+### S.1 - Low level
+S.1.6 - Network - 4 instructions, 4 lines (AcalamityDev)  
+
+### S.4 - Function calls
+*S.4.3 - Return - 2 lines, 9 instructions (nttii, this soluttion does not work when combined with the cheaty init stack solution, so it is marked incorrect in the save file)*  
+
+
+## Cheaty solutions by number of components/lines
+
+The save file containing these is cheaty_components.json.
+
+### S.1 - Low level
+S.1.6 - Network - 3 lines, 14 instructions (AcalamityDev, this solution does not work when combined with the cheaty push static solution, so it is marked incorrect in the save file, the same applies for call)  
+
+### S.2 - Stack machine
+S.2.1 - Init stack - 1 line, 6 instructions (nttii)  
+S.2.6 - Push Static - 1 line, 9 instructions (AcalamityDev)  
+S.2.7 - Pop Static - 1 line, 9 instructions (AcalamityDev)  
+
+### S.4 - Function calls
+S.4.2 - Function - 4 lines, 22 instructions (AcalamityDev)  
+*S.4.3 - Return - 2 lines, 9 instructions (nttii, this soluttion does not work when combined with the cheaty init stack solution, so it is marked incorrect in the save file)*  
+
 ## Information for users that hold records
 
-nttii - https://www.reddit.com/user/nttii/ - 12 records (1 nands, 8 instructions, 1 components, 2 lines)  
+nttii - https://www.reddit.com/user/nttii/ - 13 records (1 nands, 8 instructions, 1 components, 2 lines, 1 cheaty lines)  
 speedydelete - https://speedydelete.com/, https://github.com/speedydelete/ - 11 records (9 nands, 2 instructions)  
 CHEpachilo - https://www.reddit.com/user/CHEpachilo/ - 10 records (10 nands)  
+AcalamityDev - Cannot find an online profile - 8 records (1 instructions, 2 lines, 1 cheaty instructions, 4 cheaty lines)  
 tctianchi - https://reddit.com/user/tctianchi/, https://github.com/tctianchi/ - 7 records (7 nands)  
 Sad_Courage_1564 - 5 records - https://www.reddit.com/user/Sad_Courage_1564/ - 5 records (5 components, 1 tokens)  
-AcalamityDev - Cannot find an online profile - 3 records (1 instructions, 2 lines)  
 speedydelete's friend - No online profile - 2 records (2 instructions)  
 mateddy - https://www.reddit.com/user/mateddy/ - 2 records (2 components)  
 johndcochran - https://www.reddit.com/user/johndcochran/ - 1 record (1 nands)  
