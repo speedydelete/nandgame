@@ -41,12 +41,12 @@ H.5.1 - SR latch - 2 nands, 2 components
 H.5.2 - D latch - 4 nands, 1 component  
 H.5.3 - Data Flip-Flop - 8 nands, 8 components (CHEpachilo)  
 H.5.3 - Register - 8 nands, 8 components (CHEpachilo)  
-H.5.5 - Counter - 188 nands, 4 components (CHEpachilo's 179 nand solution does not work due to a bug with edge triggers)  
+H.5.5 - Counter - 188 nands, 3 components (CHEpachilo's 179 nand solution does not work due to a bug with edge triggers)  
 H.5.6 - RAM - 151 nands, 150 components (CHEpachilo)  
 
 ### H.6 - Processor
 H.6.1 - Combined Memory - 100 nands, 100 components (CHEpachilo) (speedydelete's 98 nand solution is cheaty)   
-H.6.2 - ALU Instruction - 465 nands, 51 components (CHEpachilo)  
+H.6.2 - ALU Instruction - 465 nands, 51 components  
 H.6.3 - Control Selector - 61 nands, 61 components (CHEpachilo)  
 H.6.4 - Control Unit - 513 nands, 54 components (CHEpachilo's 524 nand solution is cheaty)  
 H.6.5 - Computer - 801 nands, 5 components  
@@ -138,17 +138,132 @@ O.5.9 - Processor - 1379 nands, 5 components
 
 ## Best solutions by number of components/lines
 
-The save file containing these is components.json.
+The save file containing these is components.json. Records marked in *italics* are the same as the record for the fewest number of lines/components. The nand/instruction counts assume that the optimal components from the previous section are used instead.
+
+### H.1 - Logic Gates
+*H.1.1 - Nand - 2 components*  
+*H.1.2 - Invert - 1 component, 1 nand*  
+*H.1.3 - And - 2 components, 2 nands*  
+*H.1.4 - Or - 3 components, 3 nands*  
+H.1.5 - Xor - 3 components, 6 nands  
+
+### H.2 - Arithmetics
+H.2.1 - Half Adder - 2 components, 6 nands    
+H.2.2 - Full Adder - 3 components, 13 nands  
+*H.2.3 - Multi-bit Adder - 2 components, 18 nands*  
+H.2.4 - Increment - 1 component, 144 nands  
+H.2.7 - Subtraction - 2 components, 160 nands  
+*H.2.6 - Equal to Zero - 4 components, 10 nands*  
+*H.2.7 - Less than Zero - 0 components, 0 nands*  
+
+### H.3 - Switching
+*H.3.1 - Select - 4 components, 4 nands*  
+H.3.2 - Switch - 2 components, 8 nands (nttii)  
+
+### H.4 - Arithmetic Logic Unit
+H.4.1 - Logic Unit - 7 components, 352 nands  
+H.4.2 - Arithmetic Unit - 4 components, 411 nands  
+H.4.3 - ALU - 7 components, 584 nands  
+H.4.4 - Condition - 8 components, 56 nands (mateddy)  
+
+### H.5 - Memory
+H.5.1 - SR latch - 2 components, 2 nands  
+*H.5.2 - D latch - 1 component, 4 nands*  
+H.5.3 - Data Flip-Flop - 3 components, 9 nands (TheStormAngel)  
+H.5.4 - Register - 2 components, 16 nands  
+H.5.5 - Counter - 3 components, 203 nands  
+H.5.6 - RAM - 4 components, 196 nands  
+
+### H.6 - Processor
+H.6.1 - Combined Memory - 3 components, 128 nands
+H.6.2 - ALU Instruction - 3 components, 473 nands
+H.6.3 - 
+
+### S.1 - Low level
+S.1.1 - Machine code - No record  
+S.1.2 - Assembler language - No record  
+S.1.3 - Assembler program - 4 instructions, 4 lines (nttii)  
+S.1.4 - Escape Labyrinth - 11 instructions, 11 lines (nttii)  
+S.1.5 - Display - 4 instructions, 4 lines (AcalamityDev)  
+S.1.6 - Network - 22 instructions, 21 lines (nttii)  
+
+### S.2 - Stack machine
+
+### S.3 - Jumps  
+
+### S.4 - Function calls
+S.4.1 - Call - 47 instructions, 47 lines (speedydelete)  
+S.4.2 - Function - 7 instructions, 7 lines (nttii)  
+S.4.3 - Return - 11 instructions, 7 lines (nttii)  
+S.4.4 - Push Argument - 9 instructions, 6 lines (nttii)  
+S.4.5 - Pop Argument - 9 instructions, 9 lines (nttii)  
+S.4.6 - add - 27 instructions, 8 lines  
+S.4.7 - sub - 27 instructions, 8 lines  
+S.4.8 - negate - 25 instructions, 6 lines  
+S.4.9 - getChar - 30 instructions, 11 lines (speedydelete's friend)  
+S.4.10 - putChar - 28 instructions, 8 lines (speedydelete's friend)  
+
+### S.5 - High-level language
+S.5.1 - Tokenize - 3 tokens (Sad_Courage_1564)  
+S.5.2 - Grammar - 5 rules (nttii)  
+S.5.3 - Code generation - 19 instructions, 5 lines  
+
+### S.6 - Conditionals
+S.6.1 - and - 27 instructions, 8 lines  
+S.6.2 - or - 27 instructions, 8 lines  
+S.6.3 - negate - 24 instructions, 5 lines  
+S.6.4 - equals - 32 instructions, 14 lines (speedydelete)
+
+### O.1 - Transistor level
+O.1.1 - Nand (CMOS) - 3 components (FanOfNandgame's 2 component solution is broken)  
+O.1.2 - Invert (CMOS) - 1 component  
+O.1.3 - Nor (CMOS) - 2 components (Sad_Courage_1564)  
+
+### O.2 - Logic
+O.2.1 - Xnor - 5 nands, 2 components  
+O.2.2 - Left Shift - 0 nands, 0 components  
+O.2.3 - Logical Right Shift - 0 nands, 0 components  
+O.2.4 - Arithmetic Right Shift - 0 nands, 0 components  
+O.2.5 - Barrel Shift Left - 181 nands, 166 nands  
+
+### O.3 - Arithmetics
+O.3.1 - Max - 106 nands, 106 components  
+O.3.2 - Multiplication - 1158 nands, 1021 components (kariya_mitsuru) (AcalamityDev's 600 nand solution is cheaty) 
+
+### O.4 - Floating point
+O.4.1 - Unpack floating-point value - 12 nands, 4 components (Sad_Courage_1564)  
+O.4.2 - Floating-point multiplication - 57 nands, 11 componends (CHEpachilo)  
+O.4.3 - Normalize overflow - 58 nands, 55 components (tctianchi)  
+O.4.4 - Verify exponent - 41 nands, 21 components (speedydelete)  
+O.4.5 - Align significands - 312 nands, 288 components (speedydelete)  
+O.4.6 - Add signed magnitude - 198 nands, 192 components (tctianchi)  
+O.4.7 - Normalize underflow - 207 nands, 207 components (tctianchi)  
+O.4.8 - Pack floating-point value - 305 nands, 3 components  
+O.4.9 - Floating-point multiplication - 386 nands, 4 components  
+O.4.10 - Floating-point addition - 953 nands, 5 components  
+
+### O.5 - Multitasking
+O.5.1 - Timer trigger - 91 nands, 91 components (speedydelete)  
+O.5.2 - Mode controller - 12 nands, 12 components  
+O.5.3 - Register with backup - 307 nands, 306 components (speedydelete)  
+O.5.4 - Program Counter - 431 nands, 51 components  
+O.5.5 - Register Bank - 1234 nands, 8 components (This version fixes a bug where user-mode processes can write to arbitrary registers, and therefore should be considered the optimal one, even though it uses more things than the "actually optimal" one.)  
+O.5.6 - General-purpose Memory - 499 nands, 495 components (speedydelete)  
+O.5.7 - Virtual Memory - 20 nands, 20 components (speedydelete)  
+O.5.8 - Control Unit - 969 nands, 453 components (speedydelete)  
+O.5.9 - Processor - 1379 nands, 5 components  
 
 
 ## Information for users that hold records
 
-nttii - https://www.reddit.com/user/nttii/ - 9 records (1 nands, 8 instructions)  
+nttii - https://www.reddit.com/user/nttii/ - 10 records (1 nands, 8 instructions, 1 components)  
 speedydelete - https://speedydelete.com/, https://github.com/speedydelete/ - 9 records (7 nands, 2 instructions)  
-CHEpachilo - https://www.reddit.com/user/CHEpachilo/ - 8 records (8 nands)  
+CHEpachilo - https://www.reddit.com/user/CHEpachilo/ - 7 records (7 nands)  
 tctianchi - https://reddit.com/user/tctianchi/, https://github.com/tctianchi/ - 6 records (6 nands)  
 Sad_Courage_1564 - 5 records - https://www.reddit.com/user/Sad_Courage_1564/ - 5 records (5 components, 1 tokens)  
 speedydelete's friend - No online profile - 2 records (2 instructions)
 johndcochran - https://www.reddit.com/user/johndcochran/ - 1 record (1 nands)
 AcalamityDev - Cannot find an online profile - 1 record (1 instructions)
 kariya_mitsuru - https://www.reddit.com/user/kariya_mitsuru/ - 1 record (1 nands)
+mateddy - https://www.reddit.com/user/mateddy/ - 1 record (1 components)
+TheStormAngel - https://www.reddit.com/user/TheStormAngel/ - 1 record (1 components)
