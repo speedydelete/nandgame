@@ -41,6 +41,7 @@ h2 {
 
 #editor {
     width: 50ch;
+    max-width: 50ch;
     flex: 1;
     max-height: calc(100% - 1.5em - 50px);
     justify-self: stretch;
@@ -49,7 +50,7 @@ h2 {
     font-family: 'Courier New', Courier, monospace !important;
     font-size: 15px !important;
     line-height: 1 !important;
-    overflow-y: auto;
+    overflow: auto;
 }
 
 #editor::-webkit-scrollbar {
@@ -89,7 +90,9 @@ h2 {
 }
 
 .cm-selectionBackground, .cm-editor ::selection {
-    background: #5886ff77;
+    position: relative;
+    z-index: 1000;
+    background: #0078d7 !important;
 }
 
 .cm-selectionMatch {
@@ -220,7 +223,6 @@ let view = new EditorView({
                 let selection = update.state.selection;
                 selection.ranges.forEach(range => {
                     let lineEnd = update.state.doc.lineAt(range.head).to;
-                    console.log(EditorSelection.create([new SelectionRange({anchor: lineEnd, head: lineEnd})]));
                     if (range.anchor > lineEnd) {
                         update.view.dispatch({selection: EditorSelection.create([new SelectionRange({anchor: lineEnd, head: lineEnd})])});
                     }
@@ -384,7 +386,7 @@ function preprocess(tokens) {
                         type: 'number',
                         value: lineno + 1,
                         stack: line[1].stack,
-                    }
+                    },
                 };
             }
             continue;
@@ -400,8 +402,9 @@ function preprocess(tokens) {
                         type: 'number',
                         value: lineno + 1,
                         stack: line[0].stack,
-                    }
+                    },
                 };
+                continue;
             } else if (line[0].value in ids && ids[line[0].value].type === 'macro') {
                 let value = ids[line[0].value];
                 let argValues = line.slice(1);
@@ -432,34 +435,34 @@ function preprocess(tokens) {
                 }
             }
         }
-        for (let line of lines) {
-            let outLine = [];
-            for (let token of line) {
-                if (token.type === 'variable') {
-                    if (!(token.value in ids)) {
-                        error(`'${token.value}' is not defined`, token);
+        if (inMacro) {
+            macroCode.push(...lines);
+        } else {
+            for (let line of lines) {
+                let outLine = [];
+                for (let token of line) {
+                    if (token.type === 'variable') {
+                        if (!(token.value in ids)) {
+                            error(`${token.value} is not defined`, token);
+                        }
+                        let {type, value} = ids[token.value];
+                        if (type === 'label') {
+                            value = [value];
+                        }
+                        if (type === 'macro') {
+                            error(`Macro invocations must be at the start of a line`, token);
+                        }
+                        let newStack = structuredClone(token.stack);
+                        outLine.push(...value.map(x => {
+                            x = structuredClone(x);
+                            x.stack.unshift(...newStack);
+                            return x;
+                        }));
+                    } else {
+                        outLine.push(token);
                     }
-                    let {type, value} = ids[token.value];
-                    if (type === 'label') {
-                        value = [value];
-                    }
-                    if (type === 'macro') {
-                        error(`Macro invocations must be at the start of a line`, token);
-                    }
-                    let newStack = structuredClone(token.stack);
-                    outLine.push(value.map(x => {
-                        x = structuredClone(x);
-                        x.stack.unshift(...newStack);
-                        return x;
-                    }));
-                } else {
-                    outLine.push(token);
                 }
-            }
-            if (outLine.length > 0) {
-                if (inMacro) {
-                    currentMacro.push(outLine);
-                } else {
+                if (outLine.length > 0) {
                     out.push(outLine);
                 }
             }
@@ -469,6 +472,7 @@ function preprocess(tokens) {
     if (inMacro) {
         error(`Macro '${macroToken.value}' was never ended`, macroToken);
     }
+    console.log(out);
     return out;
 }
 
