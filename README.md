@@ -83,7 +83,7 @@ S.4.6 - add - 27 instructions, 8 lines
 S.4.7 - sub - 27 instructions, 8 lines  
 S.4.8 - negate - 25 instructions, 6 lines  
 S.4.9 - getChar - 30 instructions, 11 lines (speedydelete's friend)  
-S.4.10 - putChar - 28 instructions, 8 lines (speedydelete's friend)  
+S.4.10 - putChar - 24 instructions, 8 lines (speedydelete's friend)  
 
 ### S.5 - High-level language
 S.5.1 - Tokenize - 3 tokens (Sad_Courage_1564)  
@@ -94,7 +94,7 @@ S.5.3 - Code generation - 19 instructions, 5 lines
 S.6.1 - and - 27 instructions, 8 lines  
 S.6.2 - or - 27 instructions, 8 lines  
 S.6.3 - negate - 24 instructions, 5 lines  
-S.6.4 - equals - 32 instructions, 14 lines (speedydelete)  
+S.6.4 - equals - 33 instructions, 14 lines (speedydelete)  
 
 ### O.1 - Transistor level
 O.1.1 - Nand (CMOS) - 3 components (FanOfNandgame)  
@@ -129,7 +129,7 @@ O.5.1 - Timer trigger - 91 nands, 91 components (speedydelete)
 O.5.2 - Mode controller - 12 nands, 5 components  
 O.5.3 - Register with backup - 311 nands, 308 components (speedydelete)  
 O.5.4 - Program Counter - 369 nands, 328 components  (speedydelete)  
-O.5.5 - Register Bank - 1187 nands, 1149 components (speedydelete, this version fixes a bug where user-mode processes can write to arbitrary registers, and therefore should be considered the optimal one, even though it uses more things than the "actually optimal" one.)  
+O.5.5 - Register Bank - 1180 nands, 1142 components (speedydelete, this version fixes a bug where user-mode processes can write to arbitrary registers, and therefore should be considered the optimal one, even though it uses more things than the "actually optimal" one.)  
 O.5.6 - General-purpose Memory - 499 nands, 495 components (speedydelete)  
 O.5.7 - Virtual Memory - 20 nands, 20 components (speedydelete)  
 O.5.8 - Control Unit - 969 nands, 453 components (speedydelete)  
@@ -213,7 +213,7 @@ S.4.3 - Return - 5 lines, 20 instructions (AcalamityDev)
 *S.4.7 - sub - 27 instructions, 8 lines*  
 *S.4.8 - negate - 25 instructions, 6 lines*  
 *S.4.9 - getChar - 30 instructions, 11 lines (speedydelete's friend)*  
-*S.4.10 - putChar - 28 instructions, 8 lines (speedydelete's friend)*  
+*S.4.10 - putChar - 24 instructions, 8 lines (speedydelete's friend)*  
 
 ### S.5 - High-level language
 *S.5.1 - Tokenize - 3 tokens (Sad_Courage_1564)*  
@@ -224,7 +224,7 @@ S.4.3 - Return - 5 lines, 20 instructions (AcalamityDev)
 *S.6.1 - and - 27 instructions, 8 lines*  
 *S.6.2 - or - 27 instructions, 8 lines*  
 *S.6.3 - negate - 24 instructions, 5 lines*  
-*S.6.4 - equals - 32 instructions, 14 lines (speedydelete)*  
+*S.6.4 - equals - 33 instructions, 14 lines (speedydelete)*  
 
 ### O.1 - Transistor level
 *O.1.1 - Nand (CMOS) - 2 components (FanOfNandgame)*  
@@ -258,31 +258,39 @@ O.4.7 - Normalize underflow - 40 components, 2680 nands (mateddy, slightly modif
 O.5.1 - Timer trigger - 1 component, 179 nands  
 O.5.2 - Mode controller - 5 components, 12 nands  
 O.5.3 - Register with backup - 11 components, 326 nands  
-O.5.4 - Program Counter - 3 components, 450 nands
+O.5.4 - Program Counter - 3 components, 450 nands  
 O.5.5 - Register Bank - 8 components, 1308 nands (This version fixes a bug where user-mode processes can write to arbitrary registers, and therefore should be considered the optimal one, even though it uses more things than the "actually optimal" one.)  
-O.5.6 - General-purpose Memory - 13 components, 652 nands
-O.5.7 - Virtual Memory - 2 components, 128 nands
-O.5.8 - Control Unit - 18 components, 1050 nands
+O.5.6 - General-purpose Memory - 13 components, 652 nands  
+O.5.7 - Virtual Memory - 2 components, 128 nands  
+O.5.8 - Control Unit - 18 components, 1050 nands  
 *O.5.9 - Processor - 1379 nands, 5 components*  
 
 
 ## Cheaty solutions by number of nands/instructions
 
-The save file containing these is cheaty.json.
+The save file containing these is cheaty.json. Some of these solutions break each other or other solutions, so some things are marked incorrect in the save file.
 
 ### S.1 - Low level
 S.1.6 - Network - 4 instructions, 4 lines (AcalamityDev)  
 
 ### S.4 - Function calls
-S.4.3 - Return - 2 lines, 9 instructions (nttii, this soluttion does not work when combined with the cheaty init stack solution, so it is marked incorrect in the save file)  
+S.4.3 - Return - 9 instruction, 2 lines (nttii)  
+S.4.4 - Push Argument - 6 instructions, 1 line (nttii)  
+S.4.5 - Pop Argument - 6 instructions, 1 line (AcalamityDev)  
 
+### O.3 - Arithmetics
+O.3.1 - Max - 9 nands, 5 components (Sad_Courage_1564)  
+O.3.2 - Multiplication - 14 nands, 6 components (somedirt)  
+
+### O.5 - Multiprocessing
+O.5.8 - Control Unit - 0 nands, 0 components (speedydelete's friend)  
 
 ## Cheaty solutions by number of components/lines
 
-The save file containing these is cheaty_components.json.
+The save file containing these is cheaty_components.json. Again, some of these solutions break each other or other solutions, so some things are marked incorrect in the save file.
 
 ### S.1 - Low level
-S.1.6 - Network - 3 lines, 14 instructions (AcalamityDev, this solution does not work when combined with the cheaty push static solution, so it is marked incorrect in the save file, the same applies for call)  
+S.1.6 - Network - 3 lines, 14 instructions (AcalamityDev)  
 
 ### S.2 - Stack machine
 S.2.1 - Init stack - 1 line, 6 instructions (nttii)  
@@ -291,17 +299,26 @@ S.2.7 - Pop Static - 1 line, 9 instructions (AcalamityDev)
 
 ### S.4 - Function calls
 S.4.2 - Function - 4 lines, 22 instructions (AcalamityDev)  
-*S.4.3 - Return - 2 lines, 9 instructions (nttii, this soluttion does not work when combined with the cheaty init stack solution, so it is marked incorrect in the save file)*  
+*S.4.3 - Return - 2 lines, 9 instructions (nttii, this solution does not work when combined with the cheaty init stack solution, so it is marked incorrect in the save file)*  
+*S.4.4 - Push Argument - 1 line, 6 instructions (nttii)*  
+*S.4.5 - Pop Argument - 1 line, 6 instructions (AcalamityDev)*  
+
+### O.3 - Arithmetics
+*O.3.1 - Max - 5 components, 9 nands (Sad_Courage_1564)*  
+*O.3.2 - Multiplication - 6 components, 14 nands (somedirt)*  
+
+### O.5 - Multiprocessing
+*O.5.8 - Control Unit - 0 components, 0 nands (speedydelete's friend)*  
 
 ## Information for users that hold records
 
-nttii - https://www.reddit.com/user/nttii/ - 13 records (1 nands, 8 instructions, 1 components, 2 lines, 1 cheaty lines)  
+nttii - https://www.reddit.com/user/nttii/ - 15 records (1 nands, 8 instructions, 1 components, 2 lines, 2 cheaty instructions, 1 cheaty lines)  
 speedydelete - https://speedydelete.com/, https://github.com/speedydelete/ - 11 records (9 nands, 2 instructions)  
 CHEpachilo - https://www.reddit.com/user/CHEpachilo/ - 10 records (10 nands)  
-AcalamityDev - Cannot find an online profile - 8 records (1 instructions, 2 lines, 1 cheaty instructions, 4 cheaty lines)  
+AcalamityDev - Cannot find an online profile - 9 records (1 instructions, 2 lines, 1 cheaty instructions, 5 cheaty lines)  
 tctianchi - https://reddit.com/user/tctianchi/, https://github.com/tctianchi/ - 7 records (7 nands)  
-Sad_Courage_1564 - 5 records - https://www.reddit.com/user/Sad_Courage_1564/ - 5 records (5 components, 1 tokens)  
-speedydelete's friend - No online profile - 2 records (2 instructions)  
+Sad_Courage_1564 - 6 records - https://www.reddit.com/user/Sad_Courage_1564/ - 5 records (5 components, 1 tokens, 1 cheaty nands)  
+speedydelete's friend - No online profile - 3 records (2 instructions, 1 cheaty nands)  
 mateddy - https://www.reddit.com/user/mateddy/ - 2 records (2 components)  
 johndcochran - https://www.reddit.com/user/johndcochran/ - 1 record (1 nands)  
 kariya_mitsuru - https://www.reddit.com/user/kariya_mitsuru/ - 1 record (1 nands)  
@@ -309,3 +326,4 @@ TheStormAngel - https://www.reddit.com/user/TheStormAngel/ - 1 record (1 compone
 FanOfNandgame - https://www.reddit.com/user/FanOfNandgame/ - 1 record (1 components)  
 Hafnon - https://www.reddit.com/user/Hafnon/ - 1 record (1 components)  
 pizzystrizzy - https://www.reddit.com/user/pizzystrizzy/ - 1 record (1 components)  
+somedirt - https://www.reddit.com/user/somedirt/ - 1 record (1 cheaty nands)  
