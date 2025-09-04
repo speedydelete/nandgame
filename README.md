@@ -8,6 +8,28 @@ It also contains an emulator for the nandgame.com multitasking computer at nce.h
 No records are given to people if they are too simple.
 
 
+### Emulator documentation
+
+The instructions defined in O.5.8 are available with syntax such as `PC, Mb = A ; SW`.
+
+Macros are supported like this:
+
+    macro goto x
+    A = x
+    JMP
+    endmacro
+    # code that uses it
+    # for example: goto 5
+
+Labels and defines are also supported.
+
+Pure insertion of data is supported through "instructions" such as `data 42` or `data -1`.
+
+Putting instructions in specific places is supported through lines like `loadat 0x7c00`.
+
+Selections work, but they aren't drawn, I can't figure out why.
+
+
 ## Best solutions by number of nands/instructions
 
 The save file containing these is save.json.
