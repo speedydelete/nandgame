@@ -20,30 +20,48 @@ html, body {
 body {
     display: flex;
     flex-direction: row;
-    gap: 30px;
     margin: 0;
-    padding: 30px;
     font-family: Arial, Helvetica, sans-serif;
+    background-color: #ffffff;
+    color: #000000;
 }
 
-body > div {
+button {
+    padding: 10px;
+    font-size: inherit;
+    background-color: #0d6efd;
+    color: white;
+    border: none;
+    border-radius: 5px;
+}
+
+#left {
+    flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 20px;
 }
 
-h2 {
-    padding: 15px 0;
+h1 {
     margin: 0;
-    font-size: 1.5em;
-    align-self: center;
+    padding: 13px;
+    font-size: 1.5rem;
+    font-weight: inherit;
+    background-color: #343a40;
+    color: white;
+}
+
+#editor-area {
+    flex: 1;
+    height: calc(100% - 1.5em - 30px);
+    padding: 30px;
+    padding-right: 15px;
+    display: flex;
+    flex-direction: row;
 }
 
 #editor {
-    width: 50ch;
-    max-width: 50ch;
     flex: 1;
-    max-height: calc(100% - 1.5em - 50px);
+    max-height: 100%;
     justify-self: stretch;
     background: #1e1e1e;
     color: #ffffff;
@@ -53,26 +71,26 @@ h2 {
     overflow: auto;
 }
 
-#editor::-webkit-scrollbar {
+.scrollbar::-webkit-scrollbar {
     width: 14px;
 }
 
-#editor::-webkit-scrollbar-track {
+.scrollbar::-webkit-scrollbar-track {
     box-shadow: inset 0 0 2px #424242;
 }
 
-#editor::-webkit-scrollbar-thumb {
+.scrollbar::-webkit-scrollbar-thumb {
     background-color: #383838;
 }
 
 @supports (scrollbar-color: #383838 #1e1e1e) {
-    #editor {
+    .scrollbar {
         scrollbar-color: #383838 #1e1e1e;
     }
 }
 
 @supports (scrollbar-color: #383838 #1e1e1e) and selector(::-webkit-scrollbar) {
-    #editor {
+    .scrollbar {
         scrollbar-color: initial;
     }
 }
@@ -114,46 +132,240 @@ h2 {
     color: #c6c6c6 !important;
 }
 
-button {
-    padding: 8px;
-    font-size: inherit;
-    background-color: #0d6efd;
-    color: white;
-    border: none;
+#right {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+#tabs {
+    padding-top: 4px;
+    display: flex;
+    flex-direction: row;
+    background-color: #343a40;
+}
+
+#tabs button {
+    padding: 15px;
+    background-color: #cccccc;
+    color: #0d6efd;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+#tabs button.selected {
+    background-color: #ffffff;
+    color: #495057;
+}
+
+#assembler, #emulator {
+    flex: 1;
+    height: calc(100% - 26px - 1.5rem);
+    padding: 30px;
+    padding-left: 15px;
+    flex-direction: column;
+    gap: 30px;
+}
+
+#assembler {
+    display: flex;
+}
+
+#assembler-top {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 3ch;
 }
 
 #assembled {
-    width: 35ch;
     flex: 1;
-    max-height: 100vh;
+    max-height: calc(100% - 1em - 46px);
     padding: 5px;
     font-family: 'Courier New', Courier, monospace;
     font-size: 15px;
     background-color: #1e1e1e;
-    overflow-y: scroll;
-    overflow-wrap: normal;
+    overflow-y: auto;
     white-space: pre-wrap;
 }
 
-@media (min-width: 1000px) {
-    #assembled {
-        width: 50ch;
-    }
+#emulator {
+    display: none;
+}
+
+#emulator button {
+    padding: 10px;
+    background-color: #6c757d;
+    color: white;
+}
+
+#top-buttons {
+    display: flex;
+    flex-direction: row;
+    gap: 30px;
+}
+
+#top-buttons button {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 1ch;
+}
+
+#run svg {
+    height: 1em;
+    width: 0.75em;
+}
+
+#top-buttons #stop {
+    display: none;
+}
+
+#stop svg {
+    height: 1em;
+    width: 1em;
+}
+
+#tick svg {
+    height: 1em;
+    width: 0.8125em;
+}
+
+input {
+    appearance: textfield;
+    padding: 5px;
+    font-size: inherit;
+    border: 1px solid #ced4da;
+    border-radius: 5px;
+}
+
+input:invalid {
+    color: red;
+}
+
+input::-webkit-outer-spin-button, input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+input:focus {
+    outline: none;
+}
+
+#clock-speed {
+    width: 10ch;
+}
+
+table, tr, th, td {
+    font-size: inherit;
+    border: 1px solid black;
+    border-collapse: collapse;
+}
+
+#tables {
+    display: flex;
+    flex-direction: row;
+    gap: 30px;
+}
+
+#registers {
+    font-family: 'Courier New', Courier, monospace;
+}
+
+th, td {
+    padding: 5px;
+    min-width: 1px;
+    white-space: nowrap;
+}
+
+td input {
+    border: none;
+    padding: 0;
+}
+
+#registers input.hex {
+    width: 4ch;
+}
+
+#registers input.dec {
+    width: 6ch;
+}
+
+#registers input.bin {
+    width: 16ch;
+}
+
+#tt-wrapper {
+    display: none;
 }
 
         </style>
     </head>
     <body>
         <div id="left">
-            <h2>Nandgame Computer Emulator</h2>
-            <div id="editor"></div>
-        </div>
-        <div id="middle">
-            <div><button id="assemble">Assemble</button></div>
-            <div id="assembled"></div>
+            <h1>Nandgame Computer Emulator</h1>
+            <div id="editor-area">
+                <div id="editor" class="scrollbar"></div>
+            </div>
         </div>
         <div id="right">
-            
+            <div id="tabs">
+                <button id="assembler-button" class="selected">Assembler</button>
+                <button id="emulator-button">Emulator</button>
+            </div>
+            <div id="assembler">
+                <div id="assembler-top">
+                    <button id="assemble">Assemble</button>
+                    <div id="loc"></div>
+                </div>
+                <div id="assembled" class="scrollbar"></div>
+            </div>
+            <div id="emulator">
+                <div id="top-buttons">
+                    <button id="load-code">Load Code</button>
+                    <button id="run">
+                        <svg viewBox="0 0 12 16">
+                            <polygon points="0,0 12,8 0,16" stroke-width="0" fill="white" />
+                        </svg>
+                        Run
+                    </button>
+                    <button id="stop">
+                        <svg viewBox="0 0 16 16">
+                            <rect x="0" y="0" width="16" height="16" rx="2" ry="2" stroke-width="0" fill="white" />
+                        </svg>
+                        Stop
+                    </button>
+                    <button id="tick">
+                        <svg viewBox="0 0 13 16">
+                            <polygon points="0,0 12,8 0,16" stroke-width="0" fill="white" />
+                            <rect x="12" y="2" width="1" height="12" stroke-width="0" fill="white" />
+                        </svg>
+                        Tick
+                    </button>
+                    <button id="reset">Reset</button>
+                </div>
+                <div>Clock speed: <input type="number" id="clock-speed" min="0" value="10" /> Hz</div>
+                <div id="tables">
+                    <table id="registers">
+                        <tr>
+                            <th>Name</th>
+                            <th>Hex</th>
+                            <th>Dec</th>
+                            <th>Bin</th>
+                        </tr>
+                    </table>
+                    <!-- <table id="memory">
+                        <tr>
+                            <td colspan="2">Page: <input type="number" id="page" min="0" max="32767" /></td>
+                        </tr>
+                        <tr>
+                            <th>Address</th>
+                            <th>Value</th>
+                        </tr>
+                    </table> -->
+                </div>
+                <div>Mode <span id="md">0</span><br><span id="tt-wrapper">Ticks until timer trigger: <span id="tt"></span></span><br><br><button id="sw">SW</button></div>
+            </div>
         </div>
         <script>'use strict';let currentlyLoading;function printError(e,c='red'){let x=String(e instanceof Error?e.stack:e);if(!x.includes('Error')){x=String(e)+'\n'+x.trim().split('\n').map(x=>'    at '+x).join('\n').replaceAll('@',' at ').replaceAll('at  at', 'at');}if(currentlyLoading){x=`(in ${currentlyLoading}): `+x;}if(!(document.readyState==='complete')){alert(x);return;}document.querySelectorAll('body > *').forEach(x=>x.remove());let t=document.createElement('pre');t.style.color=c;t.style.paddingLeft='15px';t.style.fontFamily='\'Courier New\',Courier,monospace';t.style.fontSize='14px';t.style.overflowX='wrap';t.textContent=x.replaceAll(/file:\/\/\/media\/fuse\/drivefs-[0-9a-f]+\/root\/code\//g,'');document.body.style.padding='0';document.body.style.paddingBottom='15px !important';document.body.appendChild(t);let l=setInterval(() => {}, 0);for(let j=1;j<=l;j++){clearInterval(j);}window.onkeydown=()=>{};}window.addEventListener('error',e=>{printError(e.error);return true;});window.addEventListener('unhandledrejection',e=>{e.preventDefault();printError(e.reason);});</script>
         <script type="module">
@@ -168,9 +380,9 @@ import {tags as t} from 'https://esm.sh/@lezer/highlight@^1.2.1';
 
 const LABEL_REGEX = /^(\*?)[a-zA-Z_][a-zA-Z0-9_]*/;
 const NUMBER_REGEX = /^-?(0b[01]+|0o[0-7]+|0x[0-9A-Fa-f]+|\d+)/;
-const REGISTERS = ['A', '*A', 'D', 'M', 'PC', 'Ab', 'Db', 'Mb', 'PCb'];
+const REGISTERS = ['A', 'D', '*A', 'PC', 'M', 'Ab', 'Db', 'Mb', 'PCb'];
 const JUMPS = ['JMP', 'JEQ', 'JNE', 'JLT', 'JLE', 'JGT', 'JGE', 'SW'];
-const KEYWORDS = ['label', 'define', 'macro', 'endmacro', 'DEFINE', 'MACRO', 'ENDMACRO', 'LABEL']
+const KEYWORDS = ['label', 'define', 'macro', 'endmacro', 'data', 'loadat', 'DEFINE', 'MACRO', 'ENDMACRO', 'LABEL', 'DATA', 'LOADAT'];
 
 
 function highlighter(stream) {
@@ -230,6 +442,27 @@ let view = new EditorView({
             }
         }),
     ],
+});
+
+
+let assemblerTab = document.getElementById('assembler');
+let emulatorTab = document.getElementById('emulator');
+
+let assemblerButton = document.getElementById('assembler-button');
+let emulatorButton = document.getElementById('emulator-button');
+
+assemblerButton.addEventListener('click', () => {
+    assemblerTab.style.display = 'flex';
+    emulatorTab.style.display = 'none';
+    assemblerButton.className = 'selected';
+    emulatorButton.className = '';
+});
+
+emulatorButton.addEventListener('click', () => {
+    assemblerTab.style.display = 'none';
+    emulatorTab.style.display = 'flex';
+    assemblerButton.className = '';
+    emulatorButton.className = 'selected';
 });
 
 
@@ -320,12 +553,13 @@ function preprocess(tokens) {
     let macroCode = [];
     let ids = Object.create(null);
     let lineno = 0;
+    let lineCount = 0;
     for (let i = 0; i < tokens.length; i++) {
         let line = tokens[i];
         let lines = [line];
         if (line.length === 0) {
             continue;
-        } else if (line[0].type === 'keyword') {
+        } else if (line[0].type === 'keyword' && line[0].value !== 'loadat') {
             if (line[0].value === 'define') {
                 let name = line[1];
                 if (!name) {
@@ -433,7 +667,10 @@ function preprocess(tokens) {
                     }
                     lines.push(outLine);
                 }
+                lineCount++;
             }
+        } else if (!inMacro && line[0].type !== 'keyword') {
+            lineCount++;
         }
         if (inMacro) {
             macroCode.push(...lines);
@@ -472,8 +709,7 @@ function preprocess(tokens) {
     if (inMacro) {
         error(`Macro '${macroToken.value}' was never ended`, macroToken);
     }
-    console.log(out);
-    return out;
+    return [out, lineCount];
 }
 
 const ALU_INSTRUCTIONS = {
@@ -501,17 +737,29 @@ const ALU_INSTRUCTIONS = {
 };
 
 function _assemble(lines) {
-    let array = new Uint16Array(lines.length);
-    for (let i = 0; i < lines.length; i++) {
-        let line = lines[i];
+    let array = new Uint16Array(262144);
+    let instructionCount = 0;
+    let address = 0;
+    for (let line of lines) {
         if (line.length === 3 && line[0].type === 'register' && line[0].value === 'A' && line[1].type === '=' && line[2].type === 'number') {
             let value = line[2].value;
             if (value < 0 || value > 32767) {
                 error(`The A register cannot be set to ${line[2].value}`, line[2]);
             }
-            array[i] = line[2].value;
+            array[address] = line[2].value;
+            instructionCount++;
+            address++;
+            continue;
+        } else if (line.length === 2 && line[0].type === 'keyword' && line[0].value === 'data' && line[1].type === 'number') {
+            array[address] = line[1].value;
+            instructionCount++;
+            address++;
+            continue;
+        } else if (line.length === 2 && line[0].type === 'keyword' && line[0].value === 'loadat' && line[1].type === 'number') {
+            address = line[1].value;
             continue;
         }
+        instructionCount++;
         let expression = [];
         let assignedTo = null;
         let jump = null;
@@ -659,23 +907,36 @@ function _assemble(lines) {
                 }
             }
         }
-        array[i] = out;
+        array[address] = out;
+        address++;
     }
-    return array;
+    return [array, instructionCount];
 }
 
 let assembled = null;
 let assembledElt = document.getElementById('assembled');
+let locElt = document.getElementById('loc');
+
+let rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
 
 function assemble(code, set = false) {
     try {
+        let instructionCount;
+        let lineCount;
         code = tokenize(code);
-        code = preprocess(code);
-        code = _assemble(code);
+        [code, lineCount] = preprocess(code);
+        [code, instructionCount] = _assemble(code);
         if (set) {
-            assembledElt.textContent = Array.from(code).map(x => x.toString(16).padStart(4, '0')).join(' ');
+            let data = Array.from(code).map(x => x.toString(16).padStart(4, '0'));
+            assembledElt.textContent = '';
+            let maxWidth = assembledElt.getBoundingClientRect().width / rem / 0.6;
+            let perLine = 2**Math.floor(Math.log2(Math.floor(maxWidth / 5)));
+            data = Array.from(Array.from({length: Math.ceil(data.length / perLine)}).map((_, i) => (i * perLine).toString(16).padStart(4, '0') + ': ' + data.slice(perLine * i, perLine * (i + 1)).join(' ')));
+            assembledElt.textContent = data.join('\n');
             assembledElt.style.color = 'white';
+            locElt.textContent = `${instructionCount} instructions, ${lineCount} lines`;
         }
+        assembled = code;
         return code;
     } catch (error) {
         if (error instanceof SyntaxError) {
@@ -683,6 +944,7 @@ function assemble(code, set = false) {
             if (set) {
                 assembledElt.textContent = 'Error: ' + error.message;
                 assembledElt.style.color = '#ff6666';
+                locElt.textContent = '';
             }
         } else {
             throw error;
@@ -690,8 +952,321 @@ function assemble(code, set = false) {
     }
 }
 
+assemble(localStorage.nceCode);
+
 document.getElementById('assemble').addEventListener('click', () => {
     assemble(localStorage.nceCode, true);
+});
+
+
+let registers = new Uint16Array(8);
+let memory = new Uint16Array(262144);
+let md = 0;
+let tt = 0;
+
+function reset() {
+    registers.fill(0);
+    memory.fill(0);
+    memory.set(assembled);
+    for (let i = 0; i < 8; i++) {
+        updateRegisterDisplay(i);
+    }
+    updateStarADisplay();
+    updateModeDisplay();
+    md = 0;
+    tt = 0;
+}
+
+document.getElementById('reset').addEventListener('click', () => {
+    if (confirm('Are you sure you want to reset?')) {
+        reset();
+    }
+});
+
+const REGISTER_INPUT_TYPES = [
+    {class: 'hex', type: 'text', pattern: '[0-9A-Fa-f]{1,4}', prefix: '0x'},
+    {class: 'dec', type: 'number', pattern: '', prefix: ''},
+    {class: 'bin', type: 'text', pattern: '[0-9]{1,16}', prefix: '0b'},
+];
+
+let registerInputs = [];
+let starAInputs;
+
+function updateRegisterDisplay(i) {
+    let value = registers[i];
+    if (i === 2) {
+        i = 3;
+    } else if (i === 3) {
+        i = 2;
+    }
+    let {hex, dec, bin} = registerInputs[i];
+    hex.value = value.toString(16).padStart(4, '0');
+    dec.value = value.toString();
+    bin.value = value.toString(2).padStart(16, '0');
+    if (i === 0) {
+        updateStarADisplay();
+    }
+}
+
+function updateStarADisplay() {
+    let value = memory[registers[0]];
+    let {hex, dec, bin} = starAInputs;
+    hex.value = value.toString(16).padStart(4, '0');
+    dec.value = value.toString();
+    bin.value = value.toString(2).padStart(16, '0');
+}
+
+let mdElt = document.getElementById('md');
+let ttWrapperElt = document.getElementById('tt-wrapper');
+let ttElt = document.getElementById('tt');
+
+function updateModeDisplay() {
+    mdElt.textContent = md;
+    if (md === 1) {
+        ttWrapperElt.style.display = 'inline';
+        ttElt.textContent = tt;
+    } else {
+        ttWrapperElt.style.display = 'none';
+    }
+}
+
+document.getElementById('sw').addEventListener('click', () => {
+    md = md === 0 ? 1 : 0;
+    if (md === 1) {
+        tt = 256;
+    }
+    updateModeDisplay();
+});
+
+let registerTable = document.getElementById('registers');
+
+for (let i = 0; i < REGISTERS.length; i++) {
+    let row = document.createElement('tr');
+    let name = document.createElement('td');
+    name.textContent = REGISTERS[i];
+    row.appendChild(name);
+    let inputs = {};
+    for (let spec of REGISTER_INPUT_TYPES) {
+        let td = document.createElement('td');
+        let input = document.createElement('input');
+        input.className = spec.class;
+        input.type = spec.type;
+        input.pattern = spec.pattern;
+        let updateNumber = i < 2 ? i : i - 1;
+        input.addEventListener('change', () => {
+            if (input.checkValidity()) {
+                let value = parseInt(spec.prefix + input.value);
+                if (i === 2) {
+                    memory[((registers[0] & 32768) ? (((registers[2] >> 12) & 7) << 15) : (((registers[2] >> 8) & 7) << 15)) | (registers[0] & 32767)] = value;
+                    updateStarADisplay();
+                } else {
+                    if (i === 3) {
+                        registers[2] = value;
+                    } else if (i === 2) {
+                        registers[3] = value;
+                    } else {
+                        registers[i] = value;
+                    }
+                    updateRegisterDisplay(updateNumber);
+                }
+            }
+        });
+        td.appendChild(input);
+        row.appendChild(td);
+        inputs[spec.class] = input;
+    }
+    if (i === 2) {
+        starAInputs = inputs;
+    } else {
+        registerInputs.push(inputs);
+    }
+    registerTable.appendChild(row);
+}
+
+reset();
+
+
+document.getElementById('load-code').addEventListener('click', () => {
+    if (confirm('Are you sure you want to load the code? This will reset the computer.')) {
+        assemble(localStorage.nceCode);
+        reset();
+    }
+});
+
+function tick(display = true) {
+    let i = memory[((registers[3] & 32768) ? (((registers[2] >> 4) & 7) << 15) : ((registers[2] & 7) << 15)) | (registers[3] & 32767)];
+    let j = false;
+    if (i & 32768) {
+        if (i & 36384) {
+            let x = registers[((i & 64) >> 4) | ((i & 192) >> 6)];
+            if (i & 8) {
+                memory[((registers[0] & 32768) ? (((registers[2] >> 12) & 7) << 15) : (((registers[2] >> 8) & 7) << 15)) | (registers[0] & 32767)] = x;
+            }
+            if (i & 1) {
+                if (md === 0) {
+                    if (i & 32) {
+                        registers[4] = x;
+                    }
+                    if (i & 16) {
+                        registers[5] = x;
+                    }
+                    if (i & 4) {
+                        registers[6] = x;
+                    }
+                    if (i & 2) {
+                        registers[7] = x;
+                    }
+                }
+            } else {
+                if (i & 32) {
+                    registers[0] = x;
+                }
+                if (i & 16) {
+                    registers[1] = x;
+                }
+                if ((i & 4) && md === 0) {
+                    registers[2] = x;
+                }
+                if (i & 2) {
+                    registers[3] = x;
+                    j = false;
+                }
+            }
+            if (i & 8192) {
+                if (md === 0) {
+                    md = 1;
+                    tt = 256;
+                    let Ab = registers[0];
+                    let Db = registers[1];
+                    let Mb = registers[2];
+                    let PCb = registers[3];
+                    registers[0] = registers[4];
+                    registers[1] = registers[5];
+                    registers[2] = registers[6];
+                    registers[3] = registers[7];
+                    registers[4] = Ab;
+                    registers[5] = Db;
+                    registers[6] = Mb;
+                    registers[7] = PCb;
+                } else {
+                    md = 0;
+                    registers[0] = registers[4];
+                    registers[1] = 2;
+                    registers[2] = 0;
+                    registers[3] = registers[7];
+                }
+                j = false;
+            }
+        } else {
+            let x = registers[1];
+            let y = (i & 4096) ? registers[0] : memory[((registers[0] & 32768) ? (((registers[2] >> 12) & 7) << 15) : (((registers[2] >> 8) & 7) << 15)) | (registers[0] & 32767)];
+            if (i & 64) {
+                let temp = x;
+                x = y;
+                y = temp;
+            }
+            if (i & 128) {
+                x = 0;
+            }
+            let r;
+            if (i & 1024) {
+                if (i & 256) {
+                    y = 1;
+                }
+                if (i & 512) {
+                    r = x - y;
+                } else {
+                    r = x + y;
+                }
+            } else {
+                if (i & 512) {
+                    if (i & 256) {
+                        r = ~x;
+                    } else {
+                        r = x ^ y;
+                    }
+                } else {
+                    if (i & 256) {
+                        r = x | y;
+                    } else {
+                        r = x & y;
+                    }
+                }
+            }
+            if (i & 32) {
+                registers[0] = r;
+            }
+            if (i & 16) {
+                registers[1] = r;
+            }
+            if (i & 8) {
+                memory[((registers[0] & 32768) ? (((registers[2] >> 12) & 7) << 15) : (((registers[2] >> 8) & 7) << 15)) | (registers[0] & 32767)] = r;
+            }
+            if (((i & 2) && r === 0) || ((i & 4) && (r & 32768)) || ((i & 1) && !(r & 32768))) {
+                registers[4] = registers[0];
+                updateRegisterDisplay(4);
+            }
+        }
+    } else {
+        registers[0] = i;
+    }
+    if (md === 1) {
+        tt--;
+        if (tt === 0) {
+            md = 0;
+            registers[0] = registers[4];
+            registers[1] = 1;
+            registers[2] = 0;
+            registers[3] = registers[7];
+            j = false;
+        }
+    }
+    if (!j) {
+        registers[3]++;
+    }
+    if (display) {
+        for (let i = 0; i < 8; i++) {
+            updateRegisterDisplay(i);
+        }
+        updateStarADisplay();
+        updateModeDisplay();
+    }
+}
+
+document.getElementById('tick').addEventListener('click', tick);
+
+let runInterval = null;
+
+let runButton = document.getElementById('run');
+let stopButton = document.getElementById('stop');
+
+let clockSpeedInput = document.getElementById('clock-speed');
+
+function run() {
+    if (runInterval !== null) {
+        clearInterval(runInterval);
+    }
+    runInterval = setInterval(tick, 1000/clockSpeedInput.value);
+    runButton.style.display = 'none';
+    stopButton.style.display = 'flex';
+}
+
+function stop() {
+    if (runInterval !== null) {
+        clearInterval(runInterval);
+        runInterval = null;
+    }
+    runButton.style.display = 'flex';
+    stopButton.style.display = 'none';
+}
+
+runButton.addEventListener('click', run);
+stopButton.addEventListener('click', stop);
+
+clockSpeedInput.addEventListener('change', () => {
+    if (runInterval !== null) {
+        run();
+    }
 });
 
         </script>
