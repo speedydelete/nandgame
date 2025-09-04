@@ -8,7 +8,7 @@ It also contains an emulator for the nandgame.com multitasking computer at nce.h
 No records are given to people if they are too simple.
 
 
-### Emulator documentation
+## Emulator documentation
 
 The instructions defined in O.5.8 are available with syntax such as `PC, Mb = A ; SW`.
 
