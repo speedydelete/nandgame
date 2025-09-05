@@ -29,10 +29,23 @@ body {
 button {
     padding: 10px;
     font-size: inherit;
-    background-color: #0d6efd;
+    background-color: #6c757d;
     color: white;
     border: none;
     border-radius: 5px;
+}
+
+button.blue {
+    background-color: #0d6efd;
+}
+
+button.red {
+    background-color: #dc3545;
+}
+
+code, pre {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: inherit;
 }
 
 #left {
@@ -41,7 +54,48 @@ button {
     flex-direction: column;
 }
 
-h1 {
+#files-wrapper {
+    min-width: 20ch;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid #dfdfdf;
+    border-radius: 10px;
+}
+
+#files-header {
+    padding: 10px;
+    background-color: #f7f7f7;
+    border-top-left-radius: 5px;
+    border-top-right-radius: 5px;
+}
+
+#files {
+    flex: 1;
+}
+
+.file {
+    padding: 10px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    font-family: 'Courier New', Courier, monospace;
+}
+
+.file.selected {
+    background-color: #0d6efd;
+    color: white;
+}
+
+#file-buttons {
+    padding: 10px;
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+#left h1 {
     margin: 0;
     padding: 13px;
     font-size: 1.5rem;
@@ -57,6 +111,7 @@ h1 {
     padding-right: 15px;
     display: flex;
     flex-direction: row;
+    gap: 30px;
 }
 
 #editor {
@@ -107,10 +162,12 @@ h1 {
     border-left-color: #ffffff !important;
 }
 
-.cm-selectionBackground, .cm-editor ::selection {
-    position: relative;
-    z-index: 1000;
-    background: #0078d7 !important;
+.cm-content {
+    background-color: transparent;
+}
+
+.cm-selectionBackground, .cm-content ::selection {
+    background: #264f78 !important;
 }
 
 .cm-selectionMatch {
@@ -158,11 +215,14 @@ h1 {
     color: #495057;
 }
 
-#assembler, #emulator {
+#assembler, #emulator, #help {
     flex: 1;
     height: calc(100% - 26px - 1.5rem);
     padding: 30px;
     padding-left: 15px;
+}
+
+#assembler, #emulator {
     flex-direction: column;
     gap: 30px;
 }
@@ -189,8 +249,9 @@ h1 {
     white-space: pre-wrap;
 }
 
-#emulator {
+#emulator, #help {
     display: none;
+    overflow-y: auto;
 }
 
 #emulator button {
@@ -299,12 +360,25 @@ td input {
     display: none;
 }
 
+#help h1 {
+    margin-top: 0;
+}
+
         </style>
     </head>
     <body>
         <div id="left">
             <h1>Nandgame Computer Emulator</h1>
             <div id="editor-area">
+                <div id="files-wrapper">
+                    <div id="files-header">Files</div>
+                    <div id="files" class="scrollbar"></div>
+                    <div id="file-buttons">
+                        <button id="new-file">New</button>
+                        <button id="edit-file">Edit</button>
+                        <button id="delete-file" class="red">Delete</button>
+                    </div>
+                </div>
                 <div id="editor" class="scrollbar"></div>
             </div>
         </div>
@@ -312,10 +386,11 @@ td input {
             <div id="tabs">
                 <button id="assembler-button" class="selected">Assembler</button>
                 <button id="emulator-button">Emulator</button>
+                <button id="help-button">Help</button>
             </div>
             <div id="assembler">
                 <div id="assembler-top">
-                    <button id="assemble">Assemble</button>
+                    <button id="assemble" class="blue">Assemble</button>
                     <div id="loc"></div>
                 </div>
                 <div id="assembled" class="scrollbar"></div>
@@ -364,7 +439,72 @@ td input {
                         </tr>
                     </table> -->
                 </div>
-                <div>Mode <span id="md">0</span><br><span id="tt-wrapper">Ticks until timer trigger: <span id="tt"></span></span><br><br><button id="sw">SW</button></div>
+                <div>Mode <span id="md">0</span><br><span id="tt-wrapper">Ticks until forced context switch: <span id="tt"></span></span><br><br><button id="sw">SW</button></div>
+            </div>
+            <div id="help">
+                <h1>Help</h1>
+                <p>This program implements the nandgame multitasking computer. It is a 16-bit, von Neumann architecture.</p>
+                <p>There are 8 registers:</p>
+                <ul>
+                    <li><code>A</code>: address</li>
+                    <li><code>D</code>: data</li>
+                    <li><code>M</code>: mode (the segment register)</li>
+                    <li><code>PC</code>: program counter</li>
+                    <li><code>Ab</code>, <code>Db</code>, <code>Mb</code>, <code>PCb</code>: the backup registers</li>
+                </ul>
+                <p><code>*A</code> refers to the value in memory at address A.</p>
+                <p>There are 2^18 addresses (0.5 MiB) of RAM.</p>
+                <p>There are 3 types of instructions: ALU, data, and control.</p>
+                <h2>ALU Instructions</h2>
+                <p>The syntax is <code>destination = calculation ; jump</code>. Some parts can be omitted, so <code>destination = calculation</code>, <code>calculation ; jump</code>, or <code>jump</code> are all valid syntax.</p>
+                <p>Valid destinations are: <code>A</code>, <code>D</code>, <code>*A</code>, or any combination of the 3.</p>
+                <p>Calculations:</p>
+                <ul>
+                    <li><code>D + A</code> or <code>A + D</code></li>
+                    <li><code>D - A</code> or <code>A - D</code></li>
+                    <li><code>D & A</code> or <code>A & D</code> (bitwise AND)</li>
+                    <li><code>D | A</code> or <code>A | D</code> (bitwise OR)</li>
+                    <li><code>D ^ A</code> or <code>A ^ D</code> (bitwise XOR)</li>
+                    <li><code>D + 1</code> or <code>A + 1</code></li>
+                    <li><code>D - 1</code> or <code>A - 1</code></li>
+                    <li><code>-D</code> or <code>-A</code></li>
+                    <li><code>~D</code> or <code>~A</code> (bitwise negation)</li>
+                    <li><code>1</code> or <code>0</code> or <code>-1</code></li>
+                    <li><code>A</code> or <code>D</code></li>
+                </ul>
+                <p>In all calculations, <code>A</code> can be replaced with <code>*A</code>.</p>
+                <p>Jump conditions apply when the calculation result satisfies some condition:</p>
+                <ul>
+                    <li><code>JMP</code>: always jump, regardless of the result</li>
+                    <li><code>JEQ</code>: jump if the calculation is equal to 0</li>
+                    <li><code>JNE</code>: jump if the calculation is not equal to 0</li>
+                    <li><code>JLT</code>: jump if the calculation is less than 0 (the MSB (most significant bit/bit 15) is 1)</li>
+                    <li><code>JLE</code>: jump if the calculation is less than or equal to 0</li>
+                    <li><code>JGT</code>: jump if the calculation is greater than 0</li>
+                    <li><code>JGE</code>: jump if the calculation is greater than or equal to 0</li>
+                </ul>
+                <h2>Data instructions</h2>
+                <p>The syntax is <code>A = number</code>.&nbsp;&nbsp;&nbsp;<code>number</code> can optionally be prefixed with <code>0x</code> for hexadecimal, <code>0b</code> for binary, or <code>0o</code> for octal, but it must be positive (the MSB must be 0).</p>
+                <h2>Control instructions</h2>
+                <p>The syntax is <code>destination = register</code>.&nbsp;&nbsp;&nbsp;<code>; SW</code> can also be suffixed to switch the mode (there is more about that below). Again, just plain <code>SW</code> is also valid syntax.</p>
+                <p>The input register can be any of the 8 registers, <code>A</code>, <code>D</code>, <code>M</code>, <code>PC</code>, <code>Ab</code>, <code>Db</code>, <code>Mb</code>, or <code>PCb</code>.</p>
+                <p>The destination can be a combination of these registers, however, they must either all be backup or none be backup. So, <code>A = Ab</code>, <code>A, D = Ab</code>, or <code>Db, Mb = PCb</code> are all valid, but not <code>D, Mb = PCb</code>.</p>
+                <h2>Multitasking</h2>
+                <p>This is a multitasking computer. There are 2 modes, 0 (kernel), and 1 (user). Kernel mode can write to all registers, user mode can only write to <code>A</code>, <code>D</code>, and <code>PC</code>. When kernel mode uses <code>SW</code>, the mode is switched to 1 and a timer is started (this differs from the actual nandgame multitasking computer, where the timer is always going). After 256 clock cycles, the computer will be forcibly switched back to user mode. However, user mode can also switch itself back by using <code>SW</code>.</p>
+                <p>When switching from kernel to user mode, the backup and normal registers are all swapped. When switching from user to kernel mode, <code>A</code> and <code>Ab</code> are swapped, <code>D</code> is set to 1 if it was triggered by the timer, or 2 if it was triggered by code. <code>M</code> is set to 0, and <code>PC</code> and <code>PCb</code> are swapped.</p>
+                <p>There is a virtual memory system, controlled by the <code>M</code> register. It applies for both <code>PC</code> and <code>A</code>. They are turned from 16-bit into 18-bit addresses via the following algorithm.</p>
+                <p>For <code>PC</code>: If the MSB is 0, take bits 0-2 of <code>M</code> and concatenate them to the other 15 bits of <code>PC</code>. If it is 1, take bits 4-6 of <code>M</code> instead.</p>
+                <p>For <code>A</code>: If the MSB is 0, take bits 8-10 of <code>M</code> and concatenate them to the other 15 bits of <code>A</code>. If it is 1, take bits 12-14 of <code>M</code> instead.</p>
+                <h2>Assembler Features</h2>
+                <p>Python-style comments can be done with syntax such as <code># comment</code>.</p>
+                <p>Constants can be defined like <code>define LOCALS 2</code> (<code>DEFINE</code> also works).</p>
+                <p>Labels can be defined like <code>labelname:</code>. The instruction after the label's address will be stored in a constant named <code>labelname</code>. They can also be defined using more verbose syntax like <code>label labelname</code> (<code>LABEL</code> also works).</p>
+                <p>Because it is a von Neumann architecture, it is often useful to insert in data. This is done through syntax like <code>data 0xc</code>. The same number representation formats used for data instructions can all be used here.</p>
+                <p>It is also often useful to change the addresses at which instructions are inserted at. This is done through <code>loadat 0x7c00</code>. Again, all the number representation formats can be used.</p>
+                <p>Other files can be included with <code>include filename</code> (<code>INCLUDE filename</code> also works).</p>
+                <p>Finally, macros can be done like this:</p>
+                <pre>macro macroname arg1 arg2<br># code that uses the arguments<br>endmacro</pre>
+                <p>They are invoked like <code>macroname argvalue1 argvalue2</code>. The number of arguments in the definition and in the call must match.</p>
             </div>
         </div>
         <script>'use strict';let currentlyLoading;function printError(e,c='red'){let x=String(e instanceof Error?e.stack:e);if(!x.includes('Error')){x=String(e)+'\n'+x.trim().split('\n').map(x=>'    at '+x).join('\n').replaceAll('@',' at ').replaceAll('at  at', 'at');}if(currentlyLoading){x=`(in ${currentlyLoading}): `+x;}if(!(document.readyState==='complete')){alert(x);return;}document.querySelectorAll('body > *').forEach(x=>x.remove());let t=document.createElement('pre');t.style.color=c;t.style.paddingLeft='15px';t.style.fontFamily='\'Courier New\',Courier,monospace';t.style.fontSize='14px';t.style.overflowX='wrap';t.textContent=x.replaceAll(/file:\/\/\/media\/fuse\/drivefs-[0-9a-f]+\/root\/code\//g,'');document.body.style.padding='0';document.body.style.paddingBottom='15px !important';document.body.appendChild(t);let l=setInterval(() => {}, 0);for(let j=1;j<=l;j++){clearInterval(j);}window.onkeydown=()=>{};}window.addEventListener('error',e=>{printError(e.error);return true;});window.addEventListener('unhandledrejection',e=>{e.preventDefault();printError(e.reason);});</script>
@@ -375,22 +515,20 @@ import {keymap} from 'https://esm.sh/@codemirror/view@^6.0.0';
 import {EditorState, EditorSelection, SelectionRange} from 'https://esm.sh/@codemirror/state@^6.0.0';
 import {indentWithTab} from 'https://esm.sh/@codemirror/commands@^6.0.0';
 import {StreamLanguage, HighlightStyle, syntaxHighlighting, indentUnit, StringStream} from 'https://esm.sh/@codemirror/language@^6.0.0';
-import {tags as t} from 'https://esm.sh/@lezer/highlight@^1.2.1';
+import {tags as t} from 'https://esm.sh/@lezer/highlight@1.2.1';
 
 
-const LABEL_REGEX = /^(\*?)[a-zA-Z_][a-zA-Z0-9_]*/;
+const LABEL_REGEX = /^(\*?)[a-zA-Z_.$][a-zA-Z0-9_.$]*/;
 const NUMBER_REGEX = /^-?(0b[01]+|0o[0-7]+|0x[0-9A-Fa-f]+|\d+)/;
 const REGISTERS = ['A', 'D', '*A', 'PC', 'M', 'Ab', 'Db', 'Mb', 'PCb'];
 const JUMPS = ['JMP', 'JEQ', 'JNE', 'JLT', 'JLE', 'JGT', 'JGE', 'SW'];
-const KEYWORDS = ['label', 'define', 'macro', 'endmacro', 'data', 'loadat', 'DEFINE', 'MACRO', 'ENDMACRO', 'LABEL', 'DATA', 'LOADAT'];
+const KEYWORDS = ['label', 'define', 'macro', 'endmacro', 'data', 'loadat', 'include', 'DEFINE', 'MACRO', 'ENDMACRO', 'LABEL', 'DATA', 'LOADAT', 'INCLUDE'];
 
 
 function highlighter(stream) {
     let match;
     if (stream.eatSpace()) {
         return;
-    } else if (stream.match(/#.*/)) {
-        return 'comment';
     } else if (match = stream.match(LABEL_REGEX)) {
         let name = match[0];
         if (REGISTERS.includes(name)) {
@@ -402,18 +540,33 @@ function highlighter(stream) {
         } else {
             return 'variableName';
         }
+    } else if (stream.match(/#.*/)) {
+        return 'comment';
     } else {
         stream.match(NUMBER_REGEX);
         stream.next();
     }
 }
 
-if (localStorage.nceCode === undefined) {
-    localStorage.nceCode = 'A = 0x7FFF\n*A, D = D + 1\nA = 0\nD = ~D ; JMP';
+let files = Object.create(null);
+let currentFile;
+if (localStorage.nceFiles !== undefined) {
+    for (let [name, data] of Object.entries(JSON.parse(localStorage.nceFiles))) {
+        files[name] = data;
+    }
+    if (localStorage.nceLastFile !== undefined) {
+        currentFile = localStorage.nceLastFile;
+    } else {
+        currentFile = Object.keys(files)[0];
+    }
+} else {
+    files.main = localStorage.nceCode ?? 'A = 0x7FFF\n*A, D = D + 1\nA = 0\nD = ~D ; JMP';
+    currentFile = 'main';
+    localStorage.nceLastFile = 'main';
 }
 
-let view = new EditorView({
-    doc: localStorage.nceCode,
+let editor = new EditorView({
+    doc: files[currentFile],
     parent: document.getElementById('editor'),
     extensions: [
         basicSetup,
@@ -429,7 +582,7 @@ let view = new EditorView({
         ])),
         EditorView.updateListener.of((update) => {
             if (update.docChanged) {
-                localStorage.nceCode = update.state.doc.toString();
+                files[currentFile] = update.state.doc.toString();
             }
             if (update.selectionSet) {
                 let selection = update.state.selection;
@@ -444,25 +597,110 @@ let view = new EditorView({
     ],
 });
 
+setInterval(() => {
+    localStorage.nceFiles = JSON.stringify(files);
+}, 2000);
+
+let fileElts = Object.create(null);
+
+function changeFile(name) {
+    fileElts[currentFile].className = 'file';
+    fileElts[name].className = 'file selected';
+    currentFile = name;
+    localStorage.nceLastFile = name;
+    editor.dispatch({
+        changes: {
+            from: 0,
+            to: editor.state.doc.length,
+            insert: files[currentFile],
+        },
+    });
+}
+
+let filesElt = document.getElementById('files');
+
+function addFileElt(name) {
+    let elt = document.createElement('div');
+    if (currentFile === name) {
+        elt.className = 'file selected';
+    } else {
+        elt.className = 'file';
+    }
+    elt.textContent = name;
+    elt.addEventListener('click', () => changeFile(name));
+    filesElt.appendChild(elt);
+    fileElts[name] = elt;
+}
+
+for (let name in files) {
+    addFileElt(name);
+}
+
+document.getElementById('new-file').addEventListener('click', () => {
+    let name = prompt('Enter name for new file:');
+    fileElts[currentFile].className = 'file';
+    files[name] = '';
+    currentFile = name;
+    addFileElt(name);
+    changeFile(name);
+});
+
+document.getElementById('edit-file').addEventListener('click', () => {
+    let name = prompt(`Enter new name for '${currentFile}':`);
+    files[name] = files[currentFile];
+    delete files[currentFile];
+    fileElts[name] = fileElts[currentFile];
+    fileElts[name].textContent = name;
+    delete fileElts[currentFile];
+    currentFile = name;
+});
+
+document.getElementById('delete-file').addEventListener('click', () => {
+    if (Object.keys(files).length === 1) {
+        alert('Cannot delete file when only 1 file is present');
+    } else if (confirm(`Are you sure you want to delete '${currentFile}'?`)) {
+        delete files[currentFile];
+        fileElts[currentFile].remove();
+        delete fileElts[currentFile];
+        currentFile = Object.keys(files)[0];
+        changeFile(currentFile);
+    }
+});
+
 
 let assemblerTab = document.getElementById('assembler');
 let emulatorTab = document.getElementById('emulator');
+let helpTab = document.getElementById('help');
 
 let assemblerButton = document.getElementById('assembler-button');
 let emulatorButton = document.getElementById('emulator-button');
+let helpButton = document.getElementById('help-button');
 
 assemblerButton.addEventListener('click', () => {
     assemblerTab.style.display = 'flex';
     emulatorTab.style.display = 'none';
+    helpTab.style.display = 'none';
     assemblerButton.className = 'selected';
     emulatorButton.className = '';
+    helpButton.className = '';
 });
 
 emulatorButton.addEventListener('click', () => {
     assemblerTab.style.display = 'none';
     emulatorTab.style.display = 'flex';
+    helpTab.style.display = 'none';
     assemblerButton.className = '';
     emulatorButton.className = 'selected';
+    helpButton.className = '';
+});
+
+helpButton.addEventListener('click', () => {
+    assemblerTab.style.display = 'none';
+    emulatorTab.style.display = 'none';
+    helpTab.style.display = 'block';
+    assemblerButton.className = '';
+    emulatorButton.className = '';
+    helpButton.className = 'selected';
 });
 
 
@@ -480,8 +718,9 @@ function error(msg, token) {
     throw new SyntaxError(msg);
 }
 
-function tokenize(code) {
+function tokenize(filename) {
     let match;
+    let code = files[filename];
     let lines = code.split('\n');
     let out = [];
     for (let lineno = 0; lineno < lines.length; lineno++) {
@@ -492,11 +731,15 @@ function tokenize(code) {
             let stack = [{
                 line: lineno + 1,
                 col: i,
-                file: '<main>',
+                file: filename,
                 raw: line,
             }];
             if (char === ' ' || char === '\t') {
                 continue;
+            } else if (line.slice(i).startsWith('include ')) {
+                let file = line.slice(i + 'include '.length);
+                out.push(...tokenize(file));
+                break;
             } else if (char === '#') {
                 break;
             } else if (match = line.slice(i).match(NUMBER_REGEX)) {
@@ -552,7 +795,7 @@ function preprocess(tokens) {
     let macroArgs;
     let macroCode = [];
     let ids = Object.create(null);
-    let lineno = 0;
+    let address = 0;
     let lineCount = 0;
     for (let i = 0; i < tokens.length; i++) {
         let line = tokens[i];
@@ -618,7 +861,7 @@ function preprocess(tokens) {
                     type: 'label',
                     value: {
                         type: 'number',
-                        value: lineno + 1,
+                        value: address,
                         stack: line[1].stack,
                     },
                 };
@@ -634,7 +877,7 @@ function preprocess(tokens) {
                     type: 'label',
                     value: {
                         type: 'number',
-                        value: lineno + 1,
+                        value: address,
                         stack: line[0].stack,
                     },
                 };
@@ -669,8 +912,14 @@ function preprocess(tokens) {
                 }
                 lineCount++;
             }
-        } else if (!inMacro && !(line[0].type === 'keyword' && line[0].value === 'loadat')) {
-            lineCount++;
+        } else if (!inMacro) {
+            if (line[0].type === 'keyword' && line[0].value === 'loadat') {
+                if (line.length === 2 && line[1].type === 'number') {
+                    address = line[1].value - 1;
+                }
+            } else {
+                lineCount++;
+            }
         }
         if (inMacro) {
             macroCode.push(...lines);
@@ -701,10 +950,10 @@ function preprocess(tokens) {
                 }
                 if (outLine.length > 0) {
                     out.push(outLine);
+                    address++;
                 }
             }
         }
-        lineno++;
     }
     if (inMacro) {
         error(`Macro '${macroToken.value}' was never ended`, macroToken);
@@ -816,10 +1065,10 @@ function _assemble(lines) {
                 reg = reg.slice(0, -1);
                 out |= 1 << 6;
             }
-            if (reg.value === 'D' || reg.value === 'PC') {
+            if (reg === 'D' || reg === 'PC') {
                 out |= 1 << 7;
             }
-            if (reg.value === 'M' || reg.value === 'PC') {
+            if (reg === 'M' || reg === 'PC') {
                 out |= 1 << 8;
             }
             if (assignedTo) {
@@ -919,19 +1168,20 @@ let locElt = document.getElementById('loc');
 
 let rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
 
-function assemble(code, set = false) {
+function assemble(set = false) {
     try {
         let instructionCount;
         let lineCount;
-        code = tokenize(code);
+        let code = editor.state.doc.toString();
+        code = tokenize(currentFile);
         [code, lineCount] = preprocess(code);
         [code, instructionCount] = _assemble(code);
         if (set) {
             let data = Array.from(code).map(x => x.toString(16).padStart(4, '0'));
             assembledElt.textContent = '';
             let maxWidth = assembledElt.getBoundingClientRect().width / rem / 0.6;
-            let perLine = 2**Math.floor(Math.log2(Math.floor(maxWidth / 5)));
-            data = Array.from(Array.from({length: Math.ceil(data.length / perLine)}).map((_, i) => (i * perLine).toString(16).padStart(4, '0') + ': ' + data.slice(perLine * i, perLine * (i + 1)).join(' ')));
+            let perLine = 2**Math.floor(Math.log2(Math.floor(maxWidth / 5) - 3));
+            data = Array.from(Array.from({length: Math.ceil(data.length / perLine)}).map((_, i) => (i * perLine).toString(16).padStart(5, '0') + ': ' + data.slice(perLine * i, perLine * (i + 1)).join(' ')));
             assembledElt.textContent = data.join('\n');
             assembledElt.style.color = 'white';
             locElt.textContent = `${instructionCount} instructions, ${lineCount} lines`;
@@ -952,11 +1202,9 @@ function assemble(code, set = false) {
     }
 }
 
-assemble(localStorage.nceCode);
+assemble();
 
-document.getElementById('assemble').addEventListener('click', () => {
-    assemble(localStorage.nceCode, true);
-});
+document.getElementById('assemble').addEventListener('click', () => assemble(true));
 
 
 let registers = new Uint16Array(8);
@@ -967,7 +1215,9 @@ let tt = 0;
 function reset() {
     registers.fill(0);
     memory.fill(0);
-    memory.set(assembled);
+    if (assembled !== null) {
+        memory.set(assembled);
+    }
     for (let i = 0; i < 8; i++) {
         updateRegisterDisplay(i);
     }
@@ -1088,7 +1338,7 @@ reset();
 
 document.getElementById('load-code').addEventListener('click', () => {
     if (confirm('Are you sure you want to load the code? This will reset the computer.')) {
-        assemble(localStorage.nceCode);
+        assemble();
         reset();
     }
 });
@@ -1097,8 +1347,8 @@ function tick(display = true) {
     let i = memory[((registers[3] & 32768) ? (((registers[2] >> 4) & 7) << 15) : ((registers[2] & 7) << 15)) | (registers[3] & 32767)];
     let j = false;
     if (i & 32768) {
-        if (i & 36384) {
-            let x = registers[((i & 64) >> 4) | ((i & 192) >> 6)];
+        if (i & 16384) {
+            let x = registers[((i & 64) >> 4) | ((i & 192) >> 7)];
             if (i & 8) {
                 memory[((registers[0] & 32768) ? (((registers[2] >> 12) & 7) << 15) : (((registers[2] >> 8) & 7) << 15)) | (registers[0] & 32767)] = x;
             }
@@ -1150,10 +1400,14 @@ function tick(display = true) {
                     registers[7] = PCb;
                 } else {
                     md = 0;
+                    let Ab = registers[0];
                     registers[0] = registers[4];
+                    registers[4] = Ab;
                     registers[1] = 2;
                     registers[2] = 0;
+                    let PCb = registers[3];
                     registers[3] = registers[7];
+                    registers[7] = PCb;
                 }
                 j = false;
             }
@@ -1193,18 +1447,19 @@ function tick(display = true) {
                     }
                 }
             }
+            if (i & 8) {
+                memory[((registers[0] & 32768) ? (((registers[2] >> 12) & 7) << 15) : (((registers[2] >> 8) & 7) << 15)) | (registers[0] & 32767)] = r;
+            }
             if (i & 32) {
                 registers[0] = r;
             }
             if (i & 16) {
                 registers[1] = r;
             }
-            if (i & 8) {
-                memory[((registers[0] & 32768) ? (((registers[2] >> 12) & 7) << 15) : (((registers[2] >> 8) & 7) << 15)) | (registers[0] & 32767)] = r;
-            }
             if (((i & 2) && r === 0) || ((i & 4) && (r & 32768)) || ((i & 1) && !(r & 32768))) {
-                registers[4] = registers[0];
+                registers[3] = registers[0];
                 updateRegisterDisplay(4);
+                j = true;
             }
         }
     } else {
