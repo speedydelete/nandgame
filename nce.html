@@ -150,6 +150,11 @@ code, pre {
     }
 }
 
+textarea.custom {
+    height: 100%;
+    width: 100%;
+}
+
 .cm-editor.cm-focused {
     outline: none;
 }
@@ -196,13 +201,18 @@ code, pre {
 }
 
 #tabs {
-    padding-top: 4px;
     display: flex;
     flex-direction: row;
     background-color: #343a40;
 }
 
-#tabs button {
+#tabs-real {
+    padding-top: 4px;
+    display: flex;
+    flex-direction: row;
+}
+
+#tabs-real button {
     padding: 15px;
     background-color: #cccccc;
     color: #0d6efd;
@@ -210,9 +220,18 @@ code, pre {
     border-bottom-right-radius: 0;
 }
 
-#tabs button.selected {
+#tabs-real button.selected {
     background-color: #ffffff;
     color: #495057;
+}
+
+#tabs-fake {
+    margin-left: auto;
+    margin-right: 10px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
 }
 
 #assembler, #emulator, #help {
@@ -384,9 +403,15 @@ td input {
         </div>
         <div id="right">
             <div id="tabs">
-                <button id="assembler-button" class="selected">Assembler</button>
-                <button id="emulator-button">Emulator</button>
-                <button id="help-button">Help</button>
+                <div id="tabs-real">
+                    <button id="assembler-button" class="selected">Assembler</button>
+                    <button id="emulator-button">Emulator</button>
+                    <button id="help-button">Help</button>
+                </div>
+                <div id="tabs-fake">
+                    <button id="export-button" class="blue">Export</button>
+                    <button id="import-button" class="blue">Import</button>
+                </div>
             </div>
             <div id="assembler">
                 <div id="assembler-top">
@@ -517,6 +542,7 @@ import {indentWithTab} from 'https://esm.sh/@codemirror/commands@^6.0.0';
 import {StreamLanguage, HighlightStyle, syntaxHighlighting, indentUnit, StringStream} from 'https://esm.sh/@codemirror/language@^6.0.0';
 import {tags as t} from 'https://esm.sh/@lezer/highlight@1.2.1';
 
+let useTextarea = typeof EditorView !== 'function';
 
 const LABEL_REGEX = /^(\*?)[a-zA-Z_.$][a-zA-Z0-9_.$]*/;
 const NUMBER_REGEX = /^-?(0b[01]+|0o[0-7]+|0x[0-9A-Fa-f]+|\d+)/;
@@ -565,37 +591,48 @@ if (localStorage.nceFiles !== undefined) {
     localStorage.nceLastFile = 'main';
 }
 
-let editor = new EditorView({
-    doc: files[currentFile],
-    parent: document.getElementById('editor'),
-    extensions: [
-        basicSetup,
-        indentUnit.of('    '),
-        keymap.of(indentWithTab),
-        StreamLanguage.define({token: highlighter}),
-        syntaxHighlighting(HighlightStyle.define([
-            {tag: t.keyword, color: '#4ec9b0'},
-            {tag: t.controlKeyword, color: '#d4d4a4', fontWeight: 'bold'},
-            {tag: t.variableName, color: '#9cdcfe', fontWeight: 'bold'},
-            {tag: t.comment, color: '#6a9955', fontStyle: 'oblique'},
-            {tag: t.definitionKeyword, color: '#c586c0', fontWeight: 'bold'},
-        ])),
-        EditorView.updateListener.of((update) => {
-            if (update.docChanged) {
-                files[currentFile] = update.state.doc.toString();
-            }
-            if (update.selectionSet) {
-                let selection = update.state.selection;
-                selection.ranges.forEach(range => {
-                    let lineEnd = update.state.doc.lineAt(range.head).to;
-                    if (range.anchor > lineEnd) {
-                        update.view.dispatch({selection: EditorSelection.create([new SelectionRange({anchor: lineEnd, head: lineEnd})])});
-                    }
-                });
-            }
-        }),
-    ],
-});
+let editor;
+if (useTextarea) {
+    editor = document.createElement('textarea');
+    editor.className = 'custom';
+    document.getElementById('editor').appendChild(editor);
+    editor.value = files[currentFile];
+    editor.addEventListener('input', () => {
+        files[currentFile] = editor.value;
+    });
+} else {
+    editor = new EditorView({
+        doc: files[currentFile],
+        parent: document.getElementById('editor'),
+        extensions: [
+            basicSetup,
+            indentUnit.of('    '),
+            keymap.of(indentWithTab),
+            StreamLanguage.define({token: highlighter}),
+            syntaxHighlighting(HighlightStyle.define([
+                {tag: t.keyword, color: '#4ec9b0'},
+                {tag: t.controlKeyword, color: '#d4d4a4', fontWeight: 'bold'},
+                {tag: t.variableName, color: '#9cdcfe', fontWeight: 'bold'},
+                {tag: t.comment, color: '#6a9955', fontStyle: 'oblique'},
+                {tag: t.definitionKeyword, color: '#c586c0', fontWeight: 'bold'},
+            ])),
+            EditorView.updateListener.of((update) => {
+                if (update.docChanged) {
+                    files[currentFile] = update.state.doc.toString();
+                }
+                if (update.selectionSet) {
+                    let selection = update.state.selection;
+                    selection.ranges.forEach(range => {
+                        let lineEnd = update.state.doc.lineAt(range.head).to;
+                        if (range.anchor > lineEnd) {
+                            update.view.dispatch({selection: EditorSelection.create([new SelectionRange({anchor: lineEnd, head: lineEnd})])});
+                        }
+                    });
+                }
+            }),
+        ],
+    });
+}
 
 setInterval(() => {
     localStorage.nceFiles = JSON.stringify(files);
@@ -608,13 +645,17 @@ function changeFile(name) {
     fileElts[name].className = 'file selected';
     currentFile = name;
     localStorage.nceLastFile = name;
-    editor.dispatch({
-        changes: {
-            from: 0,
-            to: editor.state.doc.length,
-            insert: files[currentFile],
-        },
-    });
+    if (useTextarea) {
+        editor.value = files[currentFile];
+    } else {
+        editor.dispatch({
+            changes: {
+                from: 0,
+                to: editor.state.doc.length,
+                insert: files[currentFile],
+            },
+        });
+    }
 }
 
 let filesElt = document.getElementById('files');
@@ -851,6 +892,7 @@ function preprocess(tokens) {
                     value: macroCode,
                     args: macroArgs,
                 };
+                macroCode = [];
             } else if (line[0].value === 'label') {
                 if (line.length !== 2) {
                     error(`Expected 1 token after 'label'`, line[0]);
@@ -869,9 +911,9 @@ function preprocess(tokens) {
             continue;
         } else if (line[0].type === 'variable') {
             if (line.length === 2 && line[1].type === ':') {
-                if (line[0].value in ids) {
-                    error(`Redefinition of '${line[0].value}'`, line[0]);
-                }
+                // if (line[0].value in ids) {
+                //     error(`Redefinition of '${line[0].value}'`, line[0]);
+                // }
                 line[0].stack[0].loc = 'label';
                 ids[line[0].value] = {
                     type: 'label',
@@ -970,6 +1012,8 @@ const ALU_INSTRUCTIONS = {
     'A ^ D': 0b01001,
     '~ D': 0b01100,
     '~ A': 0b01101,
+    '- D': 0b11010,
+    '- A': 0b11011,
     'D + A': 0b10000,
     'A + D': 0b10001,
     'D - A': 0b11001,
@@ -982,7 +1026,7 @@ const ALU_INSTRUCTIONS = {
     'A': 0b00110,
     '0': 0b00010,
     '1': 0b10110,
-    '-1': 0b11110,
+    '- 1': 0b11110,
 };
 
 function _assemble(lines) {
@@ -1111,9 +1155,11 @@ function _assemble(lines) {
             let key;
             if (expression && expression.length > 0) {
                 let aluStr = expression.map(x => x.value).join(' ');
+                aluStr = aluStr.replace(/-(?! )/, '- ');
                 key = aluStr;
                 if (key.includes('*A')) {
                     key = key.replace('*A', 'A');
+                    out |= 1 << 12;
                 }
                 if (!(key in ALU_INSTRUCTIONS)) {
                     error(`Invalid ALU instruction`, expression[0]);
@@ -1172,7 +1218,12 @@ function assemble(set = false) {
     try {
         let instructionCount;
         let lineCount;
-        let code = editor.state.doc.toString();
+        let code;
+        if (useTextarea) {
+            code = editor.value;
+        } else {
+            code = editor.state.doc.toString();
+        }
         code = tokenize(currentFile);
         [code, lineCount] = preprocess(code);
         [code, instructionCount] = _assemble(code);
@@ -1413,7 +1464,7 @@ function tick(display = true) {
             }
         } else {
             let x = registers[1];
-            let y = (i & 4096) ? registers[0] : memory[((registers[0] & 32768) ? (((registers[2] >> 12) & 7) << 15) : (((registers[2] >> 8) & 7) << 15)) | (registers[0] & 32767)];
+            let y = (i & 4096) ? memory[((registers[0] & 32768) ? (((registers[2] >> 12) & 7) << 15) : (((registers[2] >> 8) & 7) << 15)) | (registers[0] & 32767)] : registers[0];
             if (i & 64) {
                 let temp = x;
                 x = y;
