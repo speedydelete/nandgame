@@ -99,9 +99,9 @@ NF.2.2 - or - 27 instructions, 8 lines
 NF.2.3 - not - 24 instructions, 5 lines
 
 ### NF.3 - Comparisons
-NF.3.1 - equals - 33 instructions, 14 lines (speedydelete)
-NF.3.2 - greaterThan - 33 instructions, 14 lines (speedydelete)
-NF.3.3 - lessThan - 33 instructions, 14 lines (speedydelete)
+NF.3.1 - equals - 32 instructions, 13 lines (God-Forever)
+NF.3.2 - greaterThan - 32 instructions, 13 lines (God-Forever)
+NF.3.3 - lessThan - 32 instructions, 13 lines (God-Forever)
 
 ### CF.1 - Input/Output
 ST.3.9 - getChar - 30 instructions, 11 lines (speedydelete's friend)
@@ -236,19 +236,19 @@ ST.3.3 - Return - 5 lines, 20 instructions (AcalamityDev)
 *ST.3.5 - Pop Argument - 9 instructions, 9 lines (nttii)*
 
 ### NF.1 - Arithmetics
-*NF.1.1 - add - 27 instructions, 8 lines*
-*NF.1.2 - sub - 27 instructions, 8 lines*
-*NF.1.3 - negate - 25 instructions, 6 lines*
+*NF.1.1 - add - 8 lines, 27 instructions*
+*NF.1.2 - sub - 8 lines, 27 instructions*
+*NF.1.3 - negate - 6 lines, 25 instructions*
 
 ### NF.2 - Logical
-*NF.2.1 - and - 27 instructions, 8 lines*
-*NF.2.2 - or - 27 instructions, 8 lines*
-*NF.2.3 - not - 24 instructions, 5 lines*
+*NF.2.1 - and - 8 lines, 27 instructions*
+*NF.2.2 - or - 8 lines, 27 instructions*
+*NF.2.3 - not - 5 lines, 24 instructions*
 
 ### NF.3 - Comparisons
-*NF.3.1 - equals - 33 instructions, 14 lines (speedydelete)*
-*NF.3.2 - greaterThan - 33 instructions, 14 lines (speedydelete)*
-*NF.3.3 - lessThan - 33 instructions, 14 lines (speedydelete)*
+*NF.3.1 - equals - 13 lines, 32 instructions (God-Forever)*
+*NF.3.2 - greaterThan - 13 lines, 32 instructions (God-Forever)*
+*NF.3.3 - lessThan - 13 lines, 32 instructions (God-Forever)*
 
 ### CF.1 - Input/Output
 *ST.3.9 - getChar - 30 instructions, 11 lines (speedydelete's friend)*
@@ -355,7 +355,8 @@ speedydelete - https://speedydelete.com/, https://github.com/speedydelete/ - 11 
 CHEpachilo - https://www.reddit.com/user/CHEpachilo/ - 10 records (10 nands)
 AcalamityDev - Cannot find an online profile - 9 records (1 instructions, 2 lines, 1 cheaty instructions, 5 cheaty lines)
 tctianchi - https://reddit.com/user/tctianchi/, https://github.com/tctianchi/ - 7 records (7 nands)
-Sad_Courage_1564 - 6 records - https://www.reddit.com/user/Sad_Courage_1564/ - 5 records (5 components, 1 tokens, 1 cheaty nands)
+Sad_Courage_1564 - https://www.reddit.com/user/Sad_Courage_1564/ - 5 records (5 components, 1 tokens, 1 cheaty nands)
+God-Forever - https://github.com/God-Forever - 3 records (3 nands)
 speedydelete's friend - No online profile - 3 records (2 instructions, 1 cheaty nands)
 mateddy - https://www.reddit.com/user/mateddy/ - 2 records (2 components)
 johndcochran - https://www.reddit.com/user/johndcochran/ - 1 record (1 nands)
