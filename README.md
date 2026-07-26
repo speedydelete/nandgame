@@ -87,17 +87,25 @@ ST.3.2 - Function - 7 instructions, 7 lines (nttii)
 ST.3.3 - Return - 11 instructions, 7 lines (nttii, it would be 10 instructions but you need to seperate the JMP from the last line for S.4.6-10 to work)
 ST.3.4 - Push Argument - 9 instructions, 6 lines (nttii)
 ST.3.5 - Pop Argument - 9 instructions, 9 lines (nttii)
-ST.3.6 - add - 27 instructions, 8 lines
-ST.3.7 - sub - 27 instructions, 8 lines
-ST.3.8 - negate - 25 instructions, 6 lines
+
+### NF.1 - Arithmetics
+NF.1.1 - add - 27 instructions, 8 lines
+NF.1.2 - sub - 27 instructions, 8 lines
+NF.1.3 - negate - 25 instructions, 6 lines
+
+### NF.2 - Logical
+NF.2.1 - and - 27 instructions, 8 lines
+NF.2.2 - or - 27 instructions, 8 lines
+NF.2.3 - not - 24 instructions, 5 lines
+
+### NF.3 - Comparisons
+NF.3.1 - equals - 33 instructions, 14 lines (speedydelete)
+NF.3.2 - greaterThan - 33 instructions, 14 lines (speedydelete)
+NF.3.3 - lessThan - 33 instructions, 14 lines (speedydelete)
+
+### CF.1 - Input/Output
 ST.3.9 - getChar - 30 instructions, 11 lines (speedydelete's friend)
 ST.3.10 - putChar - 24 instructions, 8 lines (speedydelete's friend)
-
-### ST.4 - Conditionals
-ST.4.1 - and - 27 instructions, 8 lines
-ST.4.2 - or - 27 instructions, 8 lines
-ST.4.3 - negate - 24 instructions, 5 lines
-ST.4.4 - equals - 33 instructions, 14 lines (speedydelete)
 
 ### HI - High-level language
 HI.1 - Tokenize - 3 tokens (Sad_Courage_1564)
@@ -226,17 +234,25 @@ ST.3.2 - Function - 6 lines, 15 instructions (nttii)
 ST.3.3 - Return - 5 lines, 20 instructions (AcalamityDev)
 *ST.3.4 - Push Argument - 9 instructions, 6 lines (nttii)*
 *ST.3.5 - Pop Argument - 9 instructions, 9 lines (nttii)*
-*ST.3.6 - add - 8 lines, 27 instructions*
-*ST.3.7 - sub - 8 lines, 27 instructions*
-*ST.3.8 - negate - 6 lines, 25 instructions*
-*ST.3.9 - getChar - 11 lines, 30 instructions (speedydelete's friend)*
-*ST.3.10 - putChar - 8 lines, 24 instructions (speedydelete's friend)*
 
-### ST.4 - Conditionals
-*ST.4.1 - and - 8 lines, 27 instructions*
-*ST.4.2 - or - 8 lines, 27 instructions*
-*ST.4.3 - negate - 5 lines, 24 instructions*
-*ST.4.4 - equals - 14 lines, 33 instructions (speedydelete)*
+### NF.1 - Arithmetics
+*NF.1.1 - add - 27 instructions, 8 lines*
+*NF.1.2 - sub - 27 instructions, 8 lines*
+*NF.1.3 - negate - 25 instructions, 6 lines*
+
+### NF.2 - Logical
+*NF.2.1 - and - 27 instructions, 8 lines*
+*NF.2.2 - or - 27 instructions, 8 lines*
+*NF.2.3 - not - 24 instructions, 5 lines*
+
+### NF.3 - Comparisons
+*NF.3.1 - equals - 33 instructions, 14 lines (speedydelete)*
+*NF.3.2 - greaterThan - 33 instructions, 14 lines (speedydelete)*
+*NF.3.3 - lessThan - 33 instructions, 14 lines (speedydelete)*
+
+### CF.1 - Input/Output
+*ST.3.9 - getChar - 30 instructions, 11 lines (speedydelete's friend)*
+*ST.3.10 - putChar - 24 instructions, 8 lines (speedydelete's friend)*
 
 ### HI - High-level language
 *HI.1 - Tokenize - 3 tokens (Sad_Courage_1564)*
