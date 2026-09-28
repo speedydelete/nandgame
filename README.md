@@ -128,7 +128,7 @@ ST.2.2 - If-goto - 5 instructions, 3 lines (nttii's 5 instruction 5 line solutio
 
 ### ST.3 - Function Calls
 
-ST.3.1 - Call - 47 instructions, 25 lines (speedydelete)
+ST.3.1 - Call - 36 instructions, 19 lines (GLIBG10B)
 
 ST.3.2 - Function - 7 instructions, 7 lines (nttii)
 
@@ -558,7 +558,7 @@ S.4.2 - Function - 4 lines, 22 instructions (AcalamityDev)
 
 nttii - https://www.reddit.com/user/nttii/ - 15 records (1 nands, 8 instructions, 1 components, 2 lines, 2 cheaty instructions, 1 cheaty lines)
 
-speedydelete - https://speedydelete.com/, https://github.com/speedydelete/ - 11 records (9 nands, 2 instructions)
+speedydelete - https://speedydelete.com/, https://github.com/speedydelete/ - 10 records (9 nands, 1 instructions)
 
 CHEpachilo - https://www.reddit.com/user/CHEpachilo/ - 10 records (10 nands)
 
@@ -587,3 +587,5 @@ Hafnon - https://www.reddit.com/user/Hafnon/ - 1 record (1 components)
 pizzystrizzy - https://www.reddit.com/user/pizzystrizzy/ - 1 record (1 components)
 
 somedirt - https://www.reddit.com/user/somedirt/ - 1 record (1 cheaty nands)
+
+GLIBG10B - https://www.reddit.com/user/GLIBG10B/ - 1 record (1 instruction)
