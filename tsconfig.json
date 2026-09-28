@@ -1,0 +1,15 @@
+{
+    "compilerOptions": {
+        "rootDir": "./src",
+        "outDir": "./lib",
+        "lib": ["ESNext", "DOM"],
+        "target": "ESNext",
+        "module": "NodeNext",
+        "types": ["node"],
+        "resolveJsonModule": true,
+        "strict": true,
+        "sourceMap": true,
+        "declaration": true
+    },
+    "include": ["./src/**/*.ts"]
+}

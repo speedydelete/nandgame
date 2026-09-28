@@ -1,0 +1,17 @@
+
+#define CHAR_BIT 16
+
+#define BOOL_WIDTH 16
+#define CHAR_WIDTH 16
+#define SCHAR_WIDTH 16
+#define UCHAR_WIDTH 16
+#define USHRT_WIDTH 16
+#define SHRT_WIDTH 16
+#define UINT_WIDTH 16
+#define INT_WIDTH 16
+#define ULONG_WIDTH 32
+#define LONG_WIDTH 32
+#define ULLONG_WIDTH 64
+#define LLONG_WIDTH 64
+#define BITINT_MAXWIDTH 128
+#define MB_LEN_MAX 2

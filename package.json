@@ -1,0 +1,13 @@
+{
+    "name": "ncc",
+    "private": true,
+    "version": "1.0.0",
+    "description": "Nandgame C compiler",
+    "license": "MIT",
+    "author": "speedydelete",
+    "type": "module",
+    "dependencies": {
+        "@types/node": "^26.6.3",
+        "typescript": "^7.0.2"
+    }
+}
