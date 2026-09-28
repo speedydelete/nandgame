@@ -162,11 +162,13 @@ NF.3.2 - greaterThan - 32 instructions, 13 lines (God-Forever)
 
 NF.3.3 - lessThan - 32 instructions, 13 lines (God-Forever)
 
-### CF.1 - Input/Output
+### HD.1 - Input/Output
 
-ST.3.9 - getChar - 30 instructions, 11 lines (speedydelete's friend)
+HD.1.1 - getChar - 30 instructions, 11 lines (speedydelete's friend)
 
-ST.3.10 - putChar - 24 instructions, 8 lines (speedydelete's friend)
+HD.1.2 - putChar - 24 instructions, 8 lines (speedydelete's friend)
+
+HD.1.3 - readLine - 121 instructions, 34 lines (speedydelete)
 
 ### HI - High-level language
 
@@ -403,11 +405,13 @@ ST.3.3 - Return - 5 lines, 20 instructions (AcalamityDev)
 
 *NF.3.3 - lessThan - 13 lines, 32 instructions (God-Forever)*
 
-### CF.1 - Input/Output
+### HD.1 - Input/Output
 
-*ST.3.9 - getChar - 30 instructions, 11 lines (speedydelete's friend)*
+*HD.1.1 - getChar - 30 instructions, 11 lines (speedydelete's friend)*
 
-*ST.3.10 - putChar - 24 instructions, 8 lines (speedydelete's friend)*
+*HD.1.2 - putChar - 24 instructions, 8 lines (speedydelete's friend)*
+
+*HD.1.3 - readLine - 121 instructions, 34 lines (speedydelete)*
 
 ### HI - High-level language
 
@@ -558,7 +562,7 @@ S.4.2 - Function - 4 lines, 22 instructions (AcalamityDev)
 
 nttii - https://www.reddit.com/user/nttii/ - 15 records (1 nands, 8 instructions, 1 components, 2 lines, 2 cheaty instructions, 1 cheaty lines)
 
-speedydelete - https://speedydelete.com/, https://github.com/speedydelete/ - 10 records (9 nands, 1 instructions)
+speedydelete - https://speedydelete.com/, https://github.com/speedydelete/ - 11 records (9 nands, 2 instructions)
 
 CHEpachilo - https://www.reddit.com/user/CHEpachilo/ - 10 records (10 nands)
 
