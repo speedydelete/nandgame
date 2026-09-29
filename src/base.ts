@@ -1,9 +1,238 @@
 
-// $6.2.5
+export interface SimplePosition {
+    file: string;
+    line: number;
+    col: number;
+}
 
-// there are never any padding bits
+export function simplePositionToString(pos: SimplePosition): string {
+    return `${pos.file}:${pos.line}:${pos.col}`;
+}
+
+export interface Position {
+    file: string;
+    line: number;
+    col: number;
+    func?: string;
+    macro?: {
+        name: string;
+        pos: SimplePosition;
+    }[];
+}
+
+export const PLACEHOLDER_POSITION: Position = {file: '/this_file_does_not_exist.txt', line: 1, col: 0};
+
+
+export class CError extends Error {
+
+    name: string = 'CError';
+    [Symbol.toStringTag]: string = 'CError';
+
+}
+
+
+export abstract class BaseDoer {
+
+    stack: Position[];
+    files: Map<string, string>;
+
+    constructor(from?: BaseDoer) {
+        if (from) {
+            this.stack = from.stack;
+            this.files = from.files;
+        } else {
+            this.stack = [];
+            this.files = new Map<string, string>();
+        }
+    }
+
+    abstract getCurrentPos(): Position;
+
+    push(): void {
+        this.stack.push(this.getCurrentPos());
+    }
+
+    pop(): Position | undefined {
+        return this.stack.pop();
+    }
+
+    error(msg: string, overrideCurrent?: Position): never {
+        let fullStack = this.stack.slice();
+        if (overrideCurrent) {
+            fullStack.push(overrideCurrent);
+        } else {
+            fullStack.push(this.getCurrentPos());
+        }
+        fullStack = fullStack.concat(this.stack);
+        let trace: string[] = [];
+        for (let pos of fullStack) {
+            let value = `at `;
+            if (pos.func) {
+                value += `${pos.func} at `;
+            }
+            value += simplePositionToString(pos);
+            trace.push(value);
+            if (pos.macro) {
+                for (let value of pos.macro) {
+                    trace.push(`    at expansion of macro ${value.name} at ${simplePositionToString(pos)}`);
+                }
+            }
+        }
+        let text = `Error: ${msg}\n${trace.map(x => `    ${x}`).join('\n')}`;
+        throw new CError(text);
+    }
+
+}
+
+
+export abstract class BaseSimpleDoer extends BaseDoer {
+
+    currentPos: Position;
+
+    constructor(from?: BaseDoer) {
+        super(from);
+        this.currentPos = undefined as unknown as Position;
+    }
+
+    getCurrentPos(): Position {
+        return this.currentPos;
+    }
+
+}
+
+
+export type BaseToken = {pos: Position, raw: string};
+
+export const EOF = Symbol();
+export type EOF = typeof EOF;
+
+export abstract class BaseParser<Token extends BaseToken, Matcher extends EOF | unknown> extends BaseDoer {
+
+    tokens: Token[];
+    pos: number;
+
+    constructor(from?: BaseDoer) {
+        super(from);
+        this.tokens = [];
+        this.pos = 0;
+    }
+
+    getCurrentPos(): Position {
+        if (this.tokens[this.pos] === undefined) {
+            return this.tokens[this.tokens.length - 1].pos;
+        } else {
+            return this.tokens[this.pos].pos;
+        }
+    }
+
+    peek(): Token | EOF {
+        return this.tokens[this.pos] ?? EOF;
+    }
+
+    advance(): Token {
+        let out = this.tokens[this.pos];
+        if (out === undefined) {
+            this.error(`Unexpected end of input`);
+        } else {
+            this.pos++;
+            return out;
+        }
+    }
+
+    advanceOrEOF(): Token | EOF {
+        let out = this.tokens[this.pos];
+        if (out === undefined) {
+            return EOF;
+        } else {
+            this.pos++;
+            return out;
+        }
+    }
+
+    abstract _match(token: Token | EOF, matcher: Matcher): boolean;
+
+    match(...data: Matcher[]): boolean {
+        for (let i = 0; i < data.length; i++) {
+            let token = (this.tokens[this.pos + i] ?? EOF) as Token | EOF;
+            if (!this._match(token, data[i])) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    abstract _expect(token: Token | EOF, matcher: Matcher): void;
+
+    expect(...data: Matcher[]): void {
+        for (let i = 0; i < data.length; i++) {
+            let token = (this.tokens[this.pos + i] ?? EOF) as Token | EOF;
+            this._expect(token, data[i]);
+        }
+    }
+
+    eat(...data: Matcher[]): Token[] {
+        this.expect(...data);
+        let out: Token[] = [];
+        for (let i = 0; i < data.length; i++) {
+            let token = this.tokens[this.pos];
+            if (token === undefined) {
+                continue;
+            } else {
+                out.push(token);
+                this.pos++;
+            }
+        }
+        return out;
+    }
+
+    isAtEnd(): boolean {
+        return this.pos >= this.tokens.length;
+    }
+
+    try<T, U extends any[]>(func: (this: this, ...args: U) => T, ...args: U): T | undefined {
+        try {
+            return func.apply(this, args);
+        } catch (error) {
+            if (error instanceof CError) {
+                return undefined;
+            } else {
+                throw error;
+            }
+        }
+    }
+
+    tryVoid<T extends any[]>(func: (this: this, ...args: T) => void, ...args: T): boolean {
+        try {
+            func.apply(this, args);
+            return true;
+        } catch (error) {
+            if (error instanceof CError) {
+                return false;
+            } else {
+                throw error;
+            }
+        }
+    }
+
+    tryStack<T>(funcs: ((this: this) => T)[], errorMsg: string): T {
+        for (let func of funcs) {
+            try {
+                return func.apply(this);
+            } catch (error) {
+                if (!(error instanceof CError)) {
+                    throw error;
+                }
+            }
+        }
+        this.error(errorMsg);
+    }
+
+}
+
 
 export namespace t {
+
+    // there are never any padding bits except for in bool
 
     export type BaseType = {const?: boolean, volatile?: boolean, align?: number};
 
@@ -75,7 +304,7 @@ export namespace t {
     export const DOUBLE = {type: 'double', size: 4} as const;
     export type Double = BaseType & typeof DOUBLE;
 
-    export const LONG_DOUBLE = {type: 'long double', size: 8} as const;
+    export const LONG_DOUBLE = {type: 'long double', size: 4} as const;
     export type LongDouble = BaseType & typeof LONG_DOUBLE;
 
     export const BUILTIN_FLOAT16 = {type: '__builtin_float16', size: 1} as const;
