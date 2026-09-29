@@ -5,7 +5,7 @@
 
 export namespace t {
 
-    export type BaseType = {const?: boolean, volatile?: boolean};
+    export type BaseType = {const?: boolean, volatile?: boolean, align?: number};
 
     export const BOOL = {type: 'bool', size: 1} as const;
     export type Bool = BaseType & typeof BOOL;
@@ -96,9 +96,9 @@ export namespace t {
         return type.type === 'char' || type.type === 'signed char' || type.type === 'unsigned char';
     }
 
-    export type Enumerated = BaseType & {type: 'enum', size: number, backing: CompleteType};
-    export function createEnumerated(backing: CompleteType): Enumerated {
-        return {type: 'enum', size: backing.size, backing};
+    export type Enumerated = BaseType & {type: 'enum', size: number, backing: CompleteType, members: [string, bigint][]};
+    export function createEnumerated(backing: CompleteType, members:[string, bigint][] ): Enumerated {
+        return {type: 'enum', size: backing.size, backing, members};
     }
 
     export type Integer = Char | SignedInteger | UnsignedInteger;
