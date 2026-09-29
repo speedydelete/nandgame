@@ -1,8 +1,8 @@
 
-import {Position, BaseToken, BaseParser} from './base.js';
-import {PreToken} from './preprocessor.js';
+// import {Position, BaseToken, BaseParser} from './base.js';
+// import {PreToken} from './preprocessor.js';
 
 
-export class Parser extends BaseParser<Token> {
+// export class Parser extends BaseParser<Token> {
 
-}
+// }

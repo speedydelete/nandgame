@@ -101,7 +101,7 @@ export abstract class BaseSimpleDoer extends BaseDoer {
 }
 
 
-export type BaseToken = {pos: Position, raw: string};
+export type BaseToken = {pos: Position};
 
 export const EOF = Symbol();
 export type EOF = typeof EOF;

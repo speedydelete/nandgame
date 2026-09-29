@@ -126,8 +126,8 @@ export const PREPROCESSING_NUMBER_REGEX = /^(\.?[0-9](\p{XID_Continue}|'[0-9]|'[
 export type Token = BaseToken & (
     | {type: 'keyword', value: Keyword}
     | {type: 'identifier', value: string}
-    | {type: 'int-constant', value: bigint, suffix?: string}
-    | {type: 'float-constant', value: number}
+    | {type: 'int-constant', value: bigint, suffix?: string, raw: string}
+    | {type: 'float-constant', value: number, raw: string}
     | {type: 'char-constant', value: string}
     | {type: 'string-literal', value: string}
     | {type: 'symbol', value: CSymbol}
@@ -142,7 +142,7 @@ type PreToken = BaseToken & (
     | {type: 'identifier', value: string}
     | {type: 'number', value: string}
     | {type: 'char-constant', value: string}
-    | {type: 'string-literal', value: string[]}
+    | {type: 'string-literal', value: string[], raw: string}
     | {type: 'symbol', value: CSymbol}
     | {type: 'universal-char', value: string}
     | {type: 'other', value: string}
@@ -152,11 +152,12 @@ type PreMatcher =
     | EOF
     | PreToken['type']
     | Whitespace
-    | ['symbol', CSymbol | CSymbol[]]
-    | ['identifier', string | string[]]
+    | `symbol ${CSymbol}`
+    | `identifier ${string}`
+    | PreMatcher[]
 ;
 
-const STRING_PRE_NAMES: {[K in Extract<PreMatcher, string>]: string} = {
+const STRING_PRE_NAMES: {[K in Whitespace | PreToken['type']]: string} = {
     ' ': 'space',
     '\n': 'newline',
     '\t': 'tab',
@@ -172,6 +173,51 @@ const STRING_PRE_NAMES: {[K in Extract<PreMatcher, string>]: string} = {
     'universal-char': 'universal character name',
     'other': 'other',
 };
+
+function preTokenToString(token: PreToken | EOF): string {
+    if (token === EOF) {
+        return `end of file`;
+    } else if (token.type === 'whitespace') {
+        return STRING_PRE_NAMES[token.value];
+    } else if (token.type === 'other') {
+        return `'${token.value}'`;
+    } else {
+        let out = `${STRING_PRE_NAMES[token.type]} `;
+        if (token.type === 'string-literal') {
+            out += token.raw;
+        } else {
+            out += `'${token.value}'`;
+        }
+        return out;
+    }
+}
+
+function preMatcherToString(matcher: PreMatcher): string {
+    if (matcher === EOF) {
+        return `end of file`;
+    } else if (typeof matcher === 'string') {
+        if (!matcher.includes(' ')) {
+            return STRING_PRE_NAMES[matcher as Whitespace | PreToken['type']];
+        } else if (matcher.startsWith('symbol ')) {
+            return `symbol '${matcher.slice('symbol '.length)}'`;
+        } else if (matcher.startsWith('identifer ')) {
+            return `identifer '${matcher.slice('identifer '.length)}'`;
+        } else {
+            throw new Error(`This error should not occur, please report it (invalid matcher)`);
+        }
+    } else {
+        let out = matcher.map(preMatcherToString);
+        if (out.length === 0) {
+            return `nothing`;
+        } else if (out.length === 1) {
+            return out[0];
+        } else if (out.length === 2) {
+            return `${out[0]} or ${out[1]}`;
+        } else {
+            return `${out.slice(0, -1).join(', ')}, or ${out[out.length - 1]}`;
+        }
+    }
+}
 
 
 interface Macro {
@@ -189,77 +235,99 @@ class Preprocessor extends BaseParser<PreToken, PreMatcher> {
     pragmaOnced: Set<string> = new Set();
 
     _match(token: PreToken | EOF, matcher: PreMatcher): boolean {
-        
+        if (matcher === EOF) {
+            return token === EOF;
+        } else if (token === EOF) {
+            return false;
+        } else if (typeof matcher === 'string') {
+            if (matcher === ' ' || matcher === '\n' || matcher === '\t' || matcher === '\v' || matcher === '\f') {
+                return token.type === 'whitespace' && token.value === matcher;
+            } else if (matcher.startsWith('symbol ')) {
+                return token.type === 'symbol' && token.value === matcher.slice('symbol '.length);
+            } else if (matcher.startsWith('identifier ')) {
+                return token.type === 'identifier' && token.value === matcher.slice('identifier '.length);
+            } else {
+                return token.type === matcher;
+            }
+        } else {
+            return matcher.some(value => this._match(token, value));
+        }
     }
 
     _expect(token: PreToken | EOF, matcher: PreMatcher): void {
         if (this._match(token, matcher)) {
             return;
         }
-        let expected: string;
-        if (matcher === EOF) {
-            expected = `end of file`;
-        } else if (typeof matcher === 'string') {
-            expected = STRING_PRE_NAMES[matcher];
-        } else {
-            expected = `${STRING_PRE_NAMES[matcher[0]]} `;
-            if (typeof matcher[1] === 'string') {
-                expected += `'${matcher[1]}'`;
-            } else {
-                expected += matcher[1].map(x => `'${x}'`).join(', ');
-            }
-        }
-        let got: string;
-        if (token === EOF) {
-            got = `end of file`;
-        } else if (token.type === 'whitespace') {
-            got = STRING_PRE_NAMES[token.value];
-        } else {
-            got = `${STRING_PRE_NAMES[token.type]} `;
-            if (token.type === 'string-literal') {
-                got += token.raw;
-            } else {
-                got += `'${token.raw}'`;
-            }
-        }
-        this.error(`Expected ${expected}, got ${got}`);
+        this.error(`Expected ${preMatcherToString(matcher)}, got ${preTokenToString(token)}`);
     }
 
     tryToConvertToSingleToken(pos: Position, value: string): PreToken | false {
-        let raw = value;
+        if (this.canHaveHeaderTokens && value.match(HEADER_NAME_REGEX)) {
+            return {pos, type: 'header-name', value};
+        }
+        let string = parseStringLiteral(value);
+        if (Array.isArray(string)) {
+            return {pos, type: 'string-literal', value: string, raw: value};
+        }
         if (value === ' ' || value === '\n' || value === '\t' || value === '\v' || value === '\f') {
-            return {pos, raw, type: 'whitespace', value};
-        } else if (this.canHaveHeaderTokens && value.match(HEADER_NAME_REGEX)) {
-            return {pos, raw, type: 'header-name', value};
+            return {pos, type: 'whitespace', value};
         } else if (value.match(IDENTIFIER_REGEX)) {
-            return {pos, raw, type: 'identifier', value};
+            return {pos, type: 'identifier', value};
         } else if (value.match(PREPROCESSING_NUMBER_REGEX)) {
-            return {pos, raw, type: 'number', value};
+            return {pos, type: 'number', value};
         } else if (value.match(CHARACTER_CONSTANT_REGEX)) {
-            return {pos, raw, type: 'char-constant', value};
+            return {pos, type: 'char-constant', value};
         } else if (SYMBOLS.has(value as CSymbol)) {
-            return {pos, raw, type: 'symbol', value: value as CSymbol};
+            return {pos, type: 'symbol', value: value as CSymbol};
         } else if (value.match(UNIVERSAL_CHARACTER_REGEX)) {
-            return {pos, raw, type: 'universal-char', value};
+            return {pos, type: 'universal-char', value};
         } else {
-            let out = parseStringLiteral(value);
-            if (Array.isArray(out)) {
-                return {pos, raw, type: 'string-literal', value: out};
-            }
             return false;
         }
     }
 
-    convertToSingleToken(pos: Position, value: string): PreToken {
-        let out = this.tryToConvertToSingleToken(pos, value);
-        if (out === false) {
-            throw new Error(`This error should not occur (cannot convert text to single token)`);
+    updateCanHaveHeaderTokens(currentLine: PreToken[]): void {
+        this.canHaveHeaderTokens = false;
+        let i = 0;
+        while (i < currentLine.length && currentLine[i].type === 'whitespace') {
+            i++;
         }
-        return out;
-    }
-
-    isSingleToken(value: string): boolean {
-        return this.tryToConvertToSingleToken(PLACEHOLDER_POSITION, value) !== false;
+        if (i === currentLine.length) {
+            return;
+        }
+        let token = currentLine[i];
+        if (token.type === 'symbol' && token.value === '#') {
+            i++;
+            while (i < currentLine.length && currentLine[i].type === 'whitespace') {
+                i++;
+            }
+            if (i === currentLine.length) {
+                return;
+            }
+            let token = currentLine[i];
+            if (token.type === 'identifier' && token.value === 'include') {
+                this.canHaveHeaderTokens = true;
+            } else if (token.type === 'identifier' && (token.value === 'if' || token.value === 'elif')) {
+                i++;
+                let parenLevel = 0;
+                let goalParenLevel = Infinity;
+                for (; i < currentLine.length; i++) {
+                    let token = currentLine[i];
+                    if (token.type === 'symbol' && token.value === '(') {
+                        parenLevel++;
+                    } else if (token.type === 'symbol' && token.value === ')') {
+                        parenLevel--;
+                    } else if (token.type === 'identifier' && (token.value === '__has_include' || token.value === '__has_embed')) {
+                        goalParenLevel = parenLevel + 1;
+                    }
+                }
+                if (parenLevel >= goalParenLevel) {
+                    this.canHaveHeaderTokens = true;
+                } else {
+                    this.canHaveHeaderTokens = false;
+                }
+            }
+        }
     }
 
     tokenize(code: string): PreToken[] {
@@ -268,86 +336,91 @@ class Preprocessor extends BaseParser<PreToken, PreMatcher> {
         let multiLineComment: false | Position = false;
         for (let lineNumber = 1; lineNumber < lines.length + 1; lineNumber++) {
             this.canHaveHeaderTokens = false;
-            let currentLine: PreToken[] = [];
-            let currentTokenStart: Position = {file: this.currentFilePath, line: lineNumber, col: 0};
-            let currentToken = '';
-            let currentTokenIsSingleToken = false;
-            let singleLineComment: false | Position = false;
+            let line: string[] = [];
+            let startLineNumber = lineNumber;
             while (true) {
                 // translation phase 1
                 // call Array.from here to use real Unicode characters
-                let line = Array.from(lines[lineNumber - 1]);
-                let continueToNext = false;
-                for (let i = 0; i < line.length; i++) {
-                    let char = line[i];
-                    // continuation, translation phase 2
-                    if (char === '\\' && i === line.length - 1) {
-                        continueToNext = true;
-                        break;
-                    }
-                    // translation phase 3
-                    // do comments
-                    if (singleLineComment) {
-                        continue;
-                    }
-                    if (multiLineComment) {
-                        if (char === '*' && line[i + 1] === '/') {
-                            out.push(this.convertToSingleToken(multiLineComment, ' '));
-                            multiLineComment = false;
-                            i += 1;
-                            currentTokenStart = {file: this.currentFilePath, line: lineNumber, col: i + 1};
-                            currentToken = '';
-                            continue;
-                        } else {
-                            continue;
-                        }
-                    }
-                    if (char === '/' && line[i + 1] === '/') {
-                        if (currentToken !== '') {
-                            out.push(this.convertToSingleToken(currentTokenStart, currentToken));
-                        }
-                        singleLineComment = {file: this.currentFilePath, line: lineNumber, col: i};
-                        continue;
-                    } else if (char === '/' && line[i + 1] === '*') {
-                        if (currentToken !== '') {
-                            out.push(this.convertToSingleToken(currentTokenStart, currentToken));
-                        }
-                        multiLineComment = {file: this.currentFilePath, line: lineNumber, col: i};
-                        i += 1;
-                        continue;
-                    }
-                    // split it into preprocessing tokens
-                    let newToken = currentToken + char;
-                    if (!this.isSingleToken(newToken) && currentTokenIsSingleToken) {
-                        out.push(this.convertToSingleToken(currentTokenStart, currentToken));
-                        currentTokenStart = {file: this.currentFilePath, line: lineNumber, col: i};
-                        currentToken = char;
-                        currentTokenIsSingleToken = this.isSingleToken(currentToken);
-                        // update `canHaveHeaderTokens`
-                        if (!this.canHaveHeaderTokens) {
-                            // TODO WRITE THIS THING
-                        }
-                    } else {
-                        currentTokenIsSingleToken = true;
-                    }
+                for (let char of Array.from(lines[lineNumber - 1])) {
+                    line.push(char);
                 }
-                // continuation, translation phase 2
-                if (continueToNext) {
+                if (line[line.length - 1] === '\\') {
                     lineNumber++;
                 } else {
                     break;
                 }
             }
-            if (singleLineComment) {
-                currentLine.push(this.convertToSingleToken(singleLineComment, ' '));
+            lineNumber = startLineNumber;
+            // translation phase 3
+            let currentLine: PreToken[] = [];
+            let singleLineComment: false | Position = false;
+            let col = 0;
+            while (line.length > 0) {
+                if (col >= lines[lineNumber - 1].length) {
+                    col -= lines[lineNumber - 1].length;
+                    lineNumber++;
+                }
+                let pos = {file: this.currentFilePath, line: lineNumber, col};
+                let char = line[0];
+                // do comments
+                if (singleLineComment) {
+                    line.shift();
+                    col += 1;
+                    continue;
+                }
+                if (multiLineComment) {
+                    if (char === '*' && line[1] === '/') {
+                        currentLine.push({pos: multiLineComment, type: 'whitespace', value: ' '});
+                        multiLineComment = false;
+                        line.shift();
+                        line.shift();
+                        col += 2;
+                        continue;
+                    } else {
+                        line.shift();
+                        col += 1;
+                        continue;
+                    }
+                }
+                if (char === '/' && line[1] === '/') {
+                    singleLineComment = pos;
+                    line.shift();
+                    line.shift();
+                    col += 2;
+                    continue;
+                } else if (char === '/' && line[1] === '*') {
+                    multiLineComment = pos;
+                    line.shift();
+                    line.shift();
+                    col += 2;
+                    continue;
+                }
+                // get the largest possible preprocessing token
+                let found = false;
+                this.updateCanHaveHeaderTokens(currentLine);
+                for (let i = line.length; i > 0; i--) {
+                    let value = line.slice(0, i).join('');
+                    let token = this.tryToConvertToSingleToken(pos, value);
+                    if (token) {
+                        currentLine.push(token);
+                        found = true;
+                        for (let j = 0; j < i; j++) {
+                            line.shift();
+                        }
+                        col += i;
+                        break;
+                    }
+                }
+                if (!found) {
+                    currentLine.push({pos, type: 'other', value: char});
+                    line.shift();
+                    col += 1;
+                }
             }
-            if (currentToken !== '') {
-                currentLine.push(this.convertToSingleToken(currentTokenStart, currentToken));
-            }
-            currentLine.push(this.convertToSingleToken({file: this.currentFilePath, line: lineNumber, col: lines[lineNumber].length}, '\n'));
             for (let token of currentLine) {
                 out.push(token);
             }
+            out.push({pos: {file: this.currentFilePath, line: lineNumber, col}, type: 'whitespace', value: '\n'});
         }
         if (multiLineComment) {
             this.error(`Unterminated multi-line comment`, multiLineComment);
@@ -355,20 +428,22 @@ class Preprocessor extends BaseParser<PreToken, PreMatcher> {
         return out;
     }
 
-    line(): PreToken[] {
-
-    }
+    // line(): PreToken[] {
+        
+    // }
 
     preprocess(filePath: string, code: string): Token[] {
         this.currentFilePath = filePath;
         this.tokens = this.tokenize(code);
-        let newTokens: PreToken[] = [];
-        while (!this.isAtEnd()) {
-            for (let token of this.line()) {
-                newTokens.push(token);
-            }
-        }
-        this.tokens = newTokens;
+        console.log(this.tokens);
+        return [];
+        // let newTokens: PreToken[] = [];
+        // while (!this.isAtEnd()) {
+        //     for (let token of this.line()) {
+        //         newTokens.push(token);
+        //     }
+        // }
+        // this.tokens = newTokens;
     }
 
 }
@@ -378,3 +453,5 @@ export function preprocess(filePath: string, code: string): Token[] {
     let preprocessor = new Preprocessor();
     return preprocessor.preprocess(filePath, code);
 }
+
+preprocess('test.c', (await fs.readFile('test.c')).toString());
