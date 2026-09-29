@@ -170,20 +170,7 @@ export abstract class BaseParser<Token extends BaseToken, Matcher extends EOF | 
         }
     }
 
-    eat(...data: Matcher[]): Token[] {
-        this.expect(...data);
-        let out: Token[] = [];
-        for (let i = 0; i < data.length; i++) {
-            let token = this.tokens[this.pos];
-            if (token === undefined) {
-                continue;
-            } else {
-                out.push(token);
-                this.pos++;
-            }
-        }
-        return out;
-    }
+    abstract eat(value: Matcher): unknown;
 
     isAtEnd(): boolean {
         return this.pos >= this.tokens.length;

@@ -152,9 +152,19 @@ type PreMatcher =
     | EOF
     | PreToken['type']
     | Whitespace
-    | `symbol ${CSymbol}`
+    | CSymbol
     | `identifier ${string}`
     | PreMatcher[]
+;
+
+type PreMatcherReturnType<T> =
+    T extends EOF ? EOF :
+    T extends PreToken['type'] ? Extract<PreToken, {type: T}> :
+    T extends Whitespace ? Extract<PreToken, {type: 'whitespace'}> :
+    T extends CSymbol ? Extract<PreToken, {type: 'symbol', value: T}> :
+    T extends `identifier ${string}` ? Extract<PreToken, {type: 'identifier'}> :
+    T extends (infer U)[] ? PreMatcherReturnType<U>[] :
+    never
 ;
 
 const STRING_PRE_NAMES: {[K in Whitespace | PreToken['type']]: string} = {
@@ -173,6 +183,14 @@ const STRING_PRE_NAMES: {[K in Whitespace | PreToken['type']]: string} = {
     'universal-char': 'universal character name',
     'other': 'other',
 };
+
+function getPreTokenRaw(token: PreToken): string {
+    if (token.type === 'string-literal') {
+        return token.raw;
+    } else {
+        return token.value;
+    }
+}
 
 function preTokenToString(token: PreToken | EOF): string {
     if (token === EOF) {
@@ -196,14 +214,12 @@ function preMatcherToString(matcher: PreMatcher): string {
     if (matcher === EOF) {
         return `end of file`;
     } else if (typeof matcher === 'string') {
-        if (!matcher.includes(' ')) {
-            return STRING_PRE_NAMES[matcher as Whitespace | PreToken['type']];
-        } else if (matcher.startsWith('symbol ')) {
-            return `symbol '${matcher.slice('symbol '.length)}'`;
-        } else if (matcher.startsWith('identifer ')) {
-            return `identifer '${matcher.slice('identifer '.length)}'`;
+        if (SYMBOLS.has(matcher as CSymbol)) {
+            return `symbol '${matcher}'`;
+        } else if (matcher.startsWith('identifier ')) {
+            return `identifier '${matcher.slice('identifier '.length)}'`;
         } else {
-            throw new Error(`This error should not occur, please report it (invalid matcher)`);
+            return STRING_PRE_NAMES[matcher as Whitespace | PreToken['type']];
         }
     } else {
         let out = matcher.map(preMatcherToString);
@@ -242,8 +258,8 @@ class Preprocessor extends BaseParser<PreToken, PreMatcher> {
         } else if (typeof matcher === 'string') {
             if (matcher === ' ' || matcher === '\n' || matcher === '\t' || matcher === '\v' || matcher === '\f') {
                 return token.type === 'whitespace' && token.value === matcher;
-            } else if (matcher.startsWith('symbol ')) {
-                return token.type === 'symbol' && token.value === matcher.slice('symbol '.length);
+            } else if (SYMBOLS.has(matcher as CSymbol)) {
+                return token.type === 'symbol' && token.value === matcher;
             } else if (matcher.startsWith('identifier ')) {
                 return token.type === 'identifier' && token.value === matcher.slice('identifier '.length);
             } else {
@@ -259,6 +275,11 @@ class Preprocessor extends BaseParser<PreToken, PreMatcher> {
             return;
         }
         this.error(`Expected ${preMatcherToString(matcher)}, got ${preTokenToString(token)}`);
+    }
+
+    eat<T extends PreMatcher>(matcher: T): PreMatcherReturnType<T> {
+        this.expect(matcher);
+        return this.advance() as PreMatcherReturnType<T>;
     }
 
     tryToConvertToSingleToken(pos: Position, value: string): PreToken | false {
@@ -428,22 +449,51 @@ class Preprocessor extends BaseParser<PreToken, PreMatcher> {
         return out;
     }
 
-    // line(): PreToken[] {
-        
-    // }
+    pragma(): void {
+    }
+
+    directive(): PreToken[] {
+        while (this.match('whitespace') && !this.match('\n')) {
+            this.advance();
+        }
+        // handle empty directive
+        if (this.match('\n')) {
+            this.advance();
+            return [];
+        }
+        let directive = this.eat('identifier').value;
+        if (directive === 'if') {
+
+        }
+    }
+
+    line(): PreToken[] {
+        while (this.match('whitespace') && !this.match('\n')) {
+            this.advance();
+        }
+        if (!this.match('#')) {
+            let out: PreToken[] = [];
+            while (!this.match('\n')) {
+                out.push(this.advance());
+            }
+            out.push(this.eat('\n'));
+            return out;
+        }
+        this.advance();
+        this.directive();
+    }
 
     preprocess(filePath: string, code: string): Token[] {
         this.currentFilePath = filePath;
         this.tokens = this.tokenize(code);
         console.log(this.tokens);
-        return [];
-        // let newTokens: PreToken[] = [];
-        // while (!this.isAtEnd()) {
-        //     for (let token of this.line()) {
-        //         newTokens.push(token);
-        //     }
-        // }
-        // this.tokens = newTokens;
+        let newTokens: PreToken[] = [];
+        while (!this.isAtEnd()) {
+            for (let token of this.line()) {
+                newTokens.push(token);
+            }
+        }
+        this.tokens = newTokens;
     }
 
 }
