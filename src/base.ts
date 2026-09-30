@@ -33,49 +33,30 @@ export class CError extends Error {
 
 export abstract class BaseDoer {
 
-    stack: Position[];
     files: Map<string, string>;
 
     constructor(from?: BaseDoer) {
         if (from) {
-            this.stack = from.stack;
             this.files = from.files;
         } else {
-            this.stack = [];
             this.files = new Map<string, string>();
         }
     }
 
     abstract getCurrentPos(): Position;
 
-    push(): void {
-        this.stack.push(this.getCurrentPos());
-    }
-
-    pop(): Position | undefined {
-        return this.stack.pop();
-    }
-
     error(msg: string, overrideCurrent?: Position): never {
-        let fullStack = this.stack.slice();
-        if (overrideCurrent) {
-            fullStack.push(overrideCurrent);
-        } else {
-            fullStack.push(this.getCurrentPos());
-        }
-        fullStack = fullStack.concat(this.stack);
+        let pos = overrideCurrent ?? this.getCurrentPos();
         let trace: string[] = [];
-        for (let pos of fullStack) {
-            let value = `at `;
-            if (pos.func) {
-                value += `${pos.func} at `;
-            }
-            value += simplePositionToString(pos);
-            trace.push(value);
-            if (pos.macro) {
-                for (let value of pos.macro) {
-                    trace.push(`    at expansion of macro ${value.name} at ${simplePositionToString(pos)}`);
-                }
+        let value = `at `;
+        if (pos.func) {
+            value += `${pos.func} at `;
+        }
+        value += simplePositionToString(pos);
+        trace.push(value);
+        if (pos.macro) {
+            for (let value of pos.macro) {
+                trace.push(`at expansion of macro ${value.name} at ${simplePositionToString(pos)}`);
             }
         }
         let text = `Error: ${msg}\n${trace.map(x => `    ${x}`).join('\n')}`;
