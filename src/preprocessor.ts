@@ -46,7 +46,7 @@ export function parseEscapeSequence(value: string): string {
     if (value === `'` || value === '"' || value === '?' || value === '\\') {
         return value;
     } else if (value === 'a') {
-        return '\a';
+        return '\x07';
     } else if (value === 'b') {
         return '\b';
     } else if (value === 'f') {
