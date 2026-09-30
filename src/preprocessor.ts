@@ -1,5 +1,5 @@
 
-// implements translation phases 1, 2, 3, 4, 5, 6, and 7
+// implements translation phases 1, 2, 3, 4, and 5
 
 import * as path from 'node:path';
 import * as fs from 'node:fs/promises';
@@ -123,30 +123,21 @@ export const HEADER_NAME_REGEX = /^(<[^\n>]*>|"[^\n>]*")$/u;
 export const PREPROCESSING_NUMBER_REGEX = /^(\.?[0-9](\p{XID_Continue}|'[0-9]|'[_a-zA-Z]|[eEpP][+-]|\.)*)$/u;
 
 
-export type Token = BaseToken & (
-    | {type: 'keyword', value: Keyword}
-    | {type: 'identifier', value: string}
-    | {type: 'int-constant', value: bigint, suffix?: string, raw: string}
-    | {type: 'float-constant', value: number, raw: string}
-    | {type: 'char-constant', value: string}
-    | {type: 'string-literal', value: string}
-    | {type: 'symbol', value: CSymbol}
-);
 
 
-type Whitespace = ' ' | '\n' | '\t' | '\v' | '\f';
+export type Whitespace = ' ' | '\n' | '\t' | '\v' | '\f';
 
-type PreToken = BaseToken & (
-    | {type: 'whitespace', value: Whitespace}
-    | {type: 'header-name', value: string}
-    | {type: 'identifier', value: string}
-    | {type: 'number', value: string}
-    | {type: 'char-constant', value: string}
-    | {type: 'string-literal', value: string[], raw: string}
-    | {type: 'symbol', value: CSymbol}
-    | {type: 'universal-char', value: string}
-    | {type: 'other', value: string}
-);
+export type PreWhitespaceToken = BaseToken & {type: 'whitespace', value: Whitespace};
+export type PreHeaderNameToken = BaseToken & {type: 'header-name', value: string};
+export type PreIdentifierToken = BaseToken & {type: 'identifier', value: string};
+export type PreNumberToken = BaseToken & {type: 'number', value: string};
+export type PreCharConstantToken = BaseToken & {type: 'char-constant', value: string};
+export type PreStringLiteralToken = BaseToken & {type: 'string-literal', value: string[], raw: string};
+export type PreSymbolToken = BaseToken & {type: 'symbol', value: CSymbol};
+export type PreUniversalCharToken = BaseToken & {type: 'universal-char', value: string};
+export type PreOtherToken = BaseToken & {type: 'other', value: string};
+
+export type PreToken = PreWhitespaceToken | PreHeaderNameToken | PreIdentifierToken | PreNumberToken | PreCharConstantToken | PreStringLiteralToken | PreSymbolToken | PreUniversalCharToken | PreOtherToken;
 
 type PreMatcher =
     | EOF
@@ -160,10 +151,10 @@ type PreMatcher =
 type PreMatcherReturnType<T> =
     T extends EOF ? EOF :
     T extends PreToken['type'] ? Extract<PreToken, {type: T}> :
-    T extends Whitespace ? Extract<PreToken, {type: 'whitespace'}> :
-    T extends CSymbol ? Extract<PreToken, {type: 'symbol', value: T}> :
-    T extends `identifier ${string}` ? Extract<PreToken, {type: 'identifier'}> :
-    T extends (infer U)[] ? PreMatcherReturnType<U>[] :
+    T extends Whitespace ? PreWhitespaceToken :
+    T extends CSymbol ? PreSymbolToken :
+    T extends `identifier ${string}` ? PreIdentifierToken :
+    // T extends (infer U)[] ? PreMatcherReturnType<U> :
     never
 ;
 
@@ -184,7 +175,7 @@ const STRING_PRE_NAMES: {[K in Whitespace | PreToken['type']]: string} = {
     'other': 'other',
 };
 
-function getPreTokenRaw(token: PreToken): string {
+export function getPreTokenRaw(token: PreToken): string {
     if (token.type === 'string-literal') {
         return token.raw;
     } else {
@@ -192,7 +183,11 @@ function getPreTokenRaw(token: PreToken): string {
     }
 }
 
-function preTokenToString(token: PreToken | EOF): string {
+export function rawStringifyPreTokens(tokens: PreToken[]): string {
+    return tokens.map(getPreTokenRaw).toString();
+}
+
+export function preTokenToString(token: PreToken | EOF): string {
     if (token === EOF) {
         return `end of file`;
     } else if (token.type === 'whitespace') {
@@ -236,8 +231,15 @@ function preMatcherToString(matcher: PreMatcher): string {
 }
 
 
-type Macro = {function: false, value: PreToken[]} | {function: true, args: string[], variadic: boolean, body: PreToken[]}
+type Macro = 
+    | {function: false, value: PreToken[]}
+    | {function: true, args: string[], variadic: boolean, value: PreToken[]}
+;
 
+const GLOBAL_CODE_PATH = '__global__';
+const GLOBAL_CODE = `
+
+`;
 
 class Preprocessor extends BaseParser<PreToken, PreMatcher> {
 
@@ -282,6 +284,7 @@ class Preprocessor extends BaseParser<PreToken, PreMatcher> {
     }
 
     tryToConvertToSingleToken(pos: Position, value: string): PreToken | false {
+        pos = structuredClone(pos);
         if (this.canHaveHeaderTokens && value.match(HEADER_NAME_REGEX)) {
             return {pos, type: 'header-name', value};
         }
@@ -390,7 +393,7 @@ class Preprocessor extends BaseParser<PreToken, PreMatcher> {
                 }
                 if (multiLineComment) {
                     if (char === '*' && line[1] === '/') {
-                        currentLine.push({pos: multiLineComment, type: 'whitespace', value: ' '});
+                        currentLine.push({pos: structuredClone(multiLineComment), type: 'whitespace', value: ' '});
                         multiLineComment = false;
                         line.shift();
                         line.shift();
@@ -403,13 +406,13 @@ class Preprocessor extends BaseParser<PreToken, PreMatcher> {
                     }
                 }
                 if (char === '/' && line[1] === '/') {
-                    singleLineComment = pos;
+                    singleLineComment = structuredClone(pos);
                     line.shift();
                     line.shift();
                     col += 2;
                     continue;
                 } else if (char === '/' && line[1] === '*') {
-                    multiLineComment = pos;
+                    multiLineComment = structuredClone(pos);
                     line.shift();
                     line.shift();
                     col += 2;
@@ -432,7 +435,7 @@ class Preprocessor extends BaseParser<PreToken, PreMatcher> {
                     }
                 }
                 if (!found) {
-                    currentLine.push({pos, type: 'other', value: char});
+                    currentLine.push({pos: structuredClone(pos), type: 'other', value: char});
                     line.shift();
                     col += 1;
                 }
@@ -448,63 +451,502 @@ class Preprocessor extends BaseParser<PreToken, PreMatcher> {
         return out;
     }
 
-    async pragma(): Promise<void> {
-    }
-    
-    replaceMacros(tokens: PreToken[]): PreToken[] {
-
-    }
-
-    async directive(): Promise<PreToken[]> {
+    eatNonNewlineWhitespace(): void {
         while (this.match('whitespace') && !this.match('\n')) {
             this.advance();
         }
+    }
+
+    expandMacros(tokens: PreToken[]): PreToken[] {
+        let out: PreToken[] = [];
+        for (let token of tokens) {
+            if (token.type === 'identifier' && this.macros.has(token.value)) {
+                let macro = this.macros.get(token.value) as Macro;
+                if (macro.function) {
+                    
+                } else {
+                    for (let token of macro.value) {
+                        out.push(token);
+                    }
+                }
+            } else {
+                out.push(token);
+            }
+        }
+        return out;
+    }
+
+    balancedTokenSequence(): PreToken[] {
+        let out: PreToken[] = [];
+        let stack: PreSymbolToken[] = [];
+        while (!this.match('\n')) {
+            let token = this.advance();
+            if (token.type !== 'symbol') {
+                out.push(token);
+                continue;
+            }
+            let value = token.value;
+            if (value === '(' || value === '[' || value === '{') {
+                stack.push(token);
+            } else if (value === ')' || value === ']' || value === '}') {
+                let last = stack.pop();
+                if (last === undefined) {
+                    return out;
+                } else if (value !== last.value) {
+                    this.error(`Unmatched ${preTokenToString(token)}`, token.pos);
+                }
+            }
+            out.push(token);
+        }
+        let last = stack.pop();
+        if (last !== undefined) {
+            this.error(`Unmatched ${preTokenToString(last)}`, last.pos);
+        }
+        return out;
+    }
+
+    getLineAndExpandMacros(): PreToken[] {
+        let out: PreToken[] = [];
+        while (!this.match('\n')) {
+            out.push(this.advance());
+        }
+        return this.expandMacros(out);
+    }
+
+    expandMacrosInCurrentLine(): void {
+        let startPos = this.pos;
+        let data = this.getLineAndExpandMacros();
+        // splice the token list, replacing the line
+        let after = this.tokens.slice(this.pos);
+        this.tokens = this.tokens.slice(0, startPos);
+        for (let token of data) {
+            this.tokens.push(token);
+        }
+        for (let token of after) {
+            this.tokens.push(token);
+        }
+        this.pos = startPos;
+    }
+
+    getFilePath(): string {
+        this.eatNonNewlineWhitespace();
+        let nameToken = this.peek();
+        let name = '';
+        while (!this.match('\n')) {
+            name += getPreTokenRaw(this.advance());
+            if (name.startsWith('<') && name.endsWith('>')) {
+                break;
+            } else if (name.startsWith('"') && name.endsWith('"')) {
+                break;
+            }
+        }
+        name = name.trimEnd();
+        let system: boolean;
+        if (name.startsWith('<')) {
+            if (!name.endsWith('>')) {
+                this.error(`No closing bracket for opening one`, nameToken.pos);
+            }
+            name = name.slice(1, -1);
+            system = true;
+        } else if (name.startsWith('"')) {
+            if (!name.endsWith('"')) {
+                this.error(`No closing quote for opening one`, nameToken.pos);
+            }
+            name = name.slice(1, -1);
+            system = false;
+        } else {
+            this.error(`Expected header name`, nameToken.pos);
+        }
+        if (system) {
+            name = path.resolve(name, path.join(import.meta.dirname, '..', 'include'));
+        } else {
+            name = path.join(this.currentFilePath, name);
+        }
+        return name;
+    }
+
+    async evalConstantExpression(data: PreToken[], allowSpecialOperators: boolean): Promise<bigint> {
+
+    }
+
+    async pragma(): Promise<void> {
+
+    }
+
+    eatIfSection(): void {
+        let level = 1;
+        let prevPos = this.pos;
+        while (level > 0) {
+            prevPos = this.pos;
+            this.eatNonNewlineWhitespace();
+            if (this.match('#')) {
+                this.advance();
+                this.eatNonNewlineWhitespace();
+                if (this.match('identifier')) {
+                    let directive = this.advance().value;
+                    if (directive === 'if' || directive === 'ifdef' || directive === 'ifndef') {
+                        level++;
+                    } else if (directive === 'endif') {
+                        level--;
+                    } else if (level === 1 && (directive === 'elif' || directive === 'elifdef' || directive === 'elifndef' || directive === 'else')) {
+                        level--;
+                    }
+                }
+            }
+            while (!this.match('\n')) {
+                this.advance();
+            }
+            this.eat('\n');
+        }
+        this.pos = prevPos;
+    }
+
+    async conditionalCompilationDirective(directive: string): Promise<PreToken[]> {
+        let value: boolean;
+        if (directive === 'if') {
+            value = await this.evalConstantExpression(this.getLineAndExpandMacros(), true) !== 0n;
+        } else {
+            this.eatNonNewlineWhitespace();
+            let id = this.eat('identifier').value;
+            this.eatNonNewlineWhitespace();
+            if (!this.match('\n')) {
+                this.error(`More than 1 token provided for #${directive} directive`);
+            }
+            value = this.macros.has(id);
+            if (directive === 'ifndef') {
+                value = !value;
+            }
+        }
+        this.eat('\n');
+        let out: PreToken[] = [];
+        let found = false;
+        while (true) {
+            let startPos = this.pos;
+            this.eatIfSection();
+            if (value) {
+                found = true;
+                // run the line
+                let endPos = this.pos;
+                this.pos = startPos;
+                while (this.pos < endPos) {
+                    for (let token of await this.line()) {
+                        out.push(token);
+                    }
+                }
+            }
+            this.eatNonNewlineWhitespace();
+            this.eat('#');
+            this.eatNonNewlineWhitespace();
+            let directive2Token = this.eat('identifier');
+            let directive2 = directive2Token.value as 'endif' | 'elif' | 'elifdef' | 'elifndef' | 'else';
+            if (directive2 === 'endif') {
+                this.eatNonNewlineWhitespace();
+                this.eat('\n');
+                break;
+            } else {
+                if (found) {
+                    // skip over the sections if we already found a true one
+                    value = false;
+                    this.eatNonNewlineWhitespace();
+                } else if (directive2 === 'else') {
+                    // else is not conditional
+                    value = true;
+                    this.eatNonNewlineWhitespace();
+                } else if (directive2 === 'elif') {
+                    value = await this.evalConstantExpression(this.getLineAndExpandMacros(), true) !== 0n;
+                } else {
+                    this.eatNonNewlineWhitespace();
+                    let id = this.eat('identifier').value;
+                    this.eatNonNewlineWhitespace();
+                    if (!this.match('\n')) {
+                        this.error(`More than 1 token provided for '#${directive2}' directive`);
+                    }
+                    value = this.macros.has(id);
+                    if (directive2 === 'elifndef') {
+                        value = !value;
+                    }
+                }
+                this.eat('\n');
+            }
+        }
+        return out;
+    }
+
+    async includeDirective(startPos: number): Promise<void> {
+        this.expandMacrosInCurrentLine();
+        this.eatNonNewlineWhitespace();
+        if (this.match('\n')) {
+            this.error(`No argument provided for #include directive`);
+        }
+        let name = this.getFilePath();
+        this.eatNonNewlineWhitespace();
+        this.eat('\n');
+        // get and parse the file
+        let oldPath = this.currentFilePath;
+        let oldPos = this.pos;
+        this.currentFilePath = name;
+        this.pos = 0;
+        let newTokens = this.tokenize((await fs.readFile(name)).toString());
+        this.currentFilePath = oldPath;
+        this.pos = oldPos;
+        // splice the token list, deleting the directive in the process
+        let after = this.tokens.slice(this.pos);
+        this.tokens = this.tokens.slice(0, startPos);
+        for (let token of newTokens) {
+            this.tokens.push(token);
+        }
+        for (let token of after) {
+            this.tokens.push(token);
+        }
+        this.pos = startPos;
+    }
+
+    async embedDirective(): Promise<PreToken[]> {
+        this.expandMacrosInCurrentLine();
+        this.eatNonNewlineWhitespace();
+        if (this.match('\n')) {
+            this.error(`No argument provided for #include directive`);
+        }
+        let name = this.getFilePath();
+        this.eatNonNewlineWhitespace();
+        let limit: number | undefined = undefined;
+        let suffix: PreToken[] | undefined = undefined;
+        let prefix: PreToken[] | undefined = undefined;
+        let ifEmpty: PreToken[] | undefined = undefined;
+        while (!this.match('\n')) {
+            let paramToken = this.eat('identifier');
+            let param = paramToken.value;
+            if (param === 'limit') {
+                this.eat('(');
+                let expr = this.balancedTokenSequence();
+                this.eat(')');
+                limit = Number(await this.evalConstantExpression(expr, false));
+            } else if (param === 'suffix') {
+                this.eat('(');
+                suffix = this.balancedTokenSequence();
+                this.eat(')');
+            } else if (param === 'prefix') {
+                this.eat('(');
+                prefix = this.balancedTokenSequence();
+                this.eat(')');
+            } else if (param === 'if_empty') {
+                this.eat('(');
+                ifEmpty = this.balancedTokenSequence();
+                this.eat(')');
+            }
+            this.eatNonNewlineWhitespace();
+        }
+        this.eat('\n');
+        let data = new Uint8Array(await fs.readFile(name));
+        if (data.length === 0) {
+            if (ifEmpty) {
+                return ifEmpty;
+            } else {
+                return [];
+            }
+        } else {
+            let out: PreToken[] = [];
+            if (prefix) {
+                for (let token of prefix) {
+                    out.push(token);
+                }
+            }
+            let length: number;
+            if (limit !== undefined) {
+                length = Math.min(data.length, limit);
+            } else {
+                length = data.length;
+            }
+            for (let i = 0; i < length; i++) {
+                let pos = {file: name, line: 1, col: i};
+                out.push({pos: structuredClone(pos), type: 'number', value: String(data[i])});
+                if (i !== data.length - 1) {
+                    out.push({pos: structuredClone(pos), type: 'symbol', value: ','});
+                }
+            }
+            if (suffix) {
+                for (let token of suffix) {
+                    out.push(token);
+                }
+            }
+            return out;
+        }
+    }
+
+    replacementListsAreEqual(x: PreToken[], y: PreToken[]): boolean {
+        let xi = 0;
+        let yi = 0;
+        while (xi < x.length && yi < y.length) {
+            if (x[xi].type !== y[yi].type) {
+                return false;
+            }
+            if (x[xi].type === 'whitespace') {
+                while (x[xi].type === 'whitespace') {
+                    xi++;
+                }
+                while (y[yi].type === 'whitespace') {
+                    xi++;
+                }
+                continue;
+            }
+            if (getPreTokenRaw(x[xi]) !== getPreTokenRaw(y[yi])) {
+                return false;
+            }
+            xi++;
+            yi++;
+        }
+        return xi === x.length && yi === y.length;
+    }
+
+    defineDirective(): void {
+        this.eatNonNewlineWhitespace();
+        let nameToken = this.eat('identifier');
+        let name = nameToken.value;
+        let macro: Macro;
+        if (this.match('(') && !this.match('(', 'whitespace')) {
+            this.advance();
+            let args: string[] = [];
+            let variadic = false;
+            while (true) {
+                this.eatNonNewlineWhitespace();
+                if (this.match('...')) {
+                    variadic = true;
+                    break;
+                }
+                args.push(this.eat('identifier').value);
+                if (this.match(',')) {
+                    this.advance();
+                } else {
+                    break;
+                }
+            }
+            this.eatNonNewlineWhitespace();
+            this.eat(')');
+            this.eatNonNewlineWhitespace();
+            let tokens: PreToken[] = [];
+            while (!this.match('\n')) {
+                tokens.push(this.advance());
+            }
+            this.eat('\n');
+            while (tokens[tokens.length - 1].type === 'whitespace') {
+                tokens.pop();
+            }
+            macro = {function: true, args, variadic, value: tokens};
+        } else {
+            this.eatNonNewlineWhitespace();
+            let tokens: PreToken[] = [];
+            while (!this.match('\n')) {
+                tokens.push(this.advance());
+            }
+            this.eat('\n');
+            while (tokens[tokens.length - 1].type === 'whitespace') {
+                tokens.pop();
+            }
+            macro = {function: false, value: tokens};
+        }
+        let old = this.macros.get(name);
+        if (old !== undefined) {
+            let fine = false;
+            if (macro.function && old.function) {
+                if (
+                       macro.args.length === old.args.length
+                    && macro.args.every((x, i) => x === old.args[i])
+                    && macro.variadic === old.variadic
+                    && this.replacementListsAreEqual(macro.value, old.value)
+                ) {
+                    fine = true;
+                }
+            } else if (!macro.function && !old.function) {
+                if (this.replacementListsAreEqual(macro.value, old.value)) {
+                    fine = true;
+                }
+            }
+            if (!fine) {
+                this.error(`Non-identical redefinition of macro '${name}'`, nameToken.pos);
+            }
+        }
+        this.macros.set(name, macro);
+    }
+
+    undefDirective(): void {
+        this.eatNonNewlineWhitespace();
+        let name = this.eat('identifier').value;
+        this.macros.delete(name);
+        this.eatNonNewlineWhitespace();
+        this.eat('\n');
+    }
+
+    async directive(): Promise<PreToken[]> {
+        let startPos = this.pos;
+        this.eatNonNewlineWhitespace();
+        this.eat('#');
+        this.eatNonNewlineWhitespace();
         // handle empty directive
         if (this.match('\n')) {
             this.advance();
             return [];
         }
-        let directive = this.eat('identifier').value;
-        if (directive === 'if') {
-
+        let directiveToken = this.eat('identifier');
+        let directive = directiveToken.value;
+        if (directive === 'if' || directive === 'ifdef' || directive === 'ifndef') {
+            return this.conditionalCompilationDirective(directive);
+        } else if (directive === 'elif' || directive === 'elifdef' || directive === 'elifndef' || directive === 'else' || directive === 'endif') {
+            this.error(`Invalid location for #${directive} directive`, directiveToken.pos);
+        } else if (directive === 'include') {
+            await this.includeDirective(startPos);
+        } else if (directive === 'embed') {
+            return await this.embedDirective();
+        } else if (directive === 'define') {
+            this.defineDirective();
+        } else if (directive === 'undef') {
+            this.undefDirective();
+        } else {
+            this.error(`Invalid directive: '#${directive}'`, directiveToken.pos);
         }
+        return [];
     }
 
     async line(): Promise<PreToken[]> {
-        while (this.match('whitespace') && !this.match('\n')) {
-            this.advance();
-        }
-        if (!this.match('#')) {
-            let out: PreToken[] = [];
-            while (!this.match('\n')) {
-                out.push(this.advance());
-            }
+        let startPos = this.pos;
+        this.eatNonNewlineWhitespace();
+        if (this.match('#')) {
+            this.pos = startPos;
+            return await this.directive();
+        } else {
+            let out = this.getLineAndExpandMacros();
             out.push(this.eat('\n'));
             return out;
         }
-        this.advance();
-        return await this.directive();
     }
 
-    async preprocess(filePath: string, code: string): Promise<Token[]> {
+    async resolvePragmaOperator(): Promise<PreToken[]> {
+
+    }
+
+    async preprocess(filePath: string, code: string): Promise<PreToken[]> {
+        let oldPath = this.currentFilePath;
         this.currentFilePath = filePath;
         this.tokens = this.tokenize(code);
-        console.log(this.tokens);
+        this.pos = 0;
         let newTokens: PreToken[] = [];
         while (!this.isAtEnd()) {
-            for (let token of this.line()) {
+            for (let token of await this.line()) {
                 newTokens.push(token);
             }
         }
+        this.currentFilePath = oldPath;
         this.tokens = newTokens;
+        this.pos = 0;
+        newTokens = await this.resolvePragmaOperator();
+        return newTokens;
     }
 
 }
 
 
-export async function preprocess(filePath: string, code: string): Promise<Token[]> {
+export async function preprocess(filePath: string, code: string): Promise<PreToken[]> {
     let preprocessor = new Preprocessor();
-    return preprocessor.preprocess(filePath, code);
+    preprocessor.preprocess(GLOBAL_CODE_PATH, GLOBAL_CODE);
+    let out = preprocessor.preprocess(filePath, code);
+    return out;
 }
-
-preprocess('test.c', (await fs.readFile('test.c')).toString());

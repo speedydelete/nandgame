@@ -43,10 +43,10 @@ export abstract class BaseDoer {
         }
     }
 
-    abstract getCurrentPos(): Position;
+    abstract getCurrentPosition(): Position;
 
-    error(msg: string, overrideCurrent?: Position): never {
-        let pos = overrideCurrent ?? this.getCurrentPos();
+    error(msg: string, positionOverride?: Position): never {
+        let pos = positionOverride ?? this.getCurrentPosition();
         let trace: string[] = [];
         let value = `at `;
         if (pos.func) {
@@ -56,7 +56,7 @@ export abstract class BaseDoer {
         trace.push(value);
         if (pos.macro) {
             for (let value of pos.macro) {
-                trace.push(`at expansion of macro ${value.name} at ${simplePositionToString(pos)}`);
+                trace.push(`at expansion of macro '${value.name}' at ${simplePositionToString(value.pos)}`);
             }
         }
         let text = `Error: ${msg}\n${trace.map(x => `    ${x}`).join('\n')}`;
@@ -75,7 +75,7 @@ export abstract class BaseSimpleDoer extends BaseDoer {
         this.currentPos = undefined as unknown as Position;
     }
 
-    getCurrentPos(): Position {
+    getCurrentPosition(): Position {
         return this.currentPos;
     }
 
@@ -98,7 +98,7 @@ export abstract class BaseParser<Token extends BaseToken, Matcher extends EOF | 
         this.pos = 0;
     }
 
-    getCurrentPos(): Position {
+    getCurrentPosition(): Position {
         if (this.tokens[this.pos] === undefined) {
             return this.tokens[this.tokens.length - 1].pos;
         } else {
@@ -106,7 +106,16 @@ export abstract class BaseParser<Token extends BaseToken, Matcher extends EOF | 
         }
     }
 
-    peek(): Token | EOF {
+    peek(): Token {
+        let out = this.tokens[this.pos];
+        if (out === undefined) {
+            this.error(`Unexpected end of input`);
+        } else {
+            return out;
+        }
+    }
+
+    peekOrEOF(): Token | EOF {
         return this.tokens[this.pos] ?? EOF;
     }
 
