@@ -448,14 +448,14 @@ class Preprocessor extends BaseParser<PreToken, PreMatcher> {
         return out;
     }
 
-    pragma(): void {
+    async pragma(): Promise<void> {
     }
     
     replaceMacros(tokens: PreToken[]): PreToken[] {
 
     }
 
-    directive(): PreToken[] {
+    async directive(): Promise<PreToken[]> {
         while (this.match('whitespace') && !this.match('\n')) {
             this.advance();
         }
@@ -470,7 +470,7 @@ class Preprocessor extends BaseParser<PreToken, PreMatcher> {
         }
     }
 
-    line(): PreToken[] {
+    async line(): Promise<PreToken[]> {
         while (this.match('whitespace') && !this.match('\n')) {
             this.advance();
         }
@@ -483,10 +483,10 @@ class Preprocessor extends BaseParser<PreToken, PreMatcher> {
             return out;
         }
         this.advance();
-        return this.directive();
+        return await this.directive();
     }
 
-    preprocess(filePath: string, code: string): Token[] {
+    async preprocess(filePath: string, code: string): Promise<Token[]> {
         this.currentFilePath = filePath;
         this.tokens = this.tokenize(code);
         console.log(this.tokens);
@@ -502,7 +502,7 @@ class Preprocessor extends BaseParser<PreToken, PreMatcher> {
 }
 
 
-export function preprocess(filePath: string, code: string): Token[] {
+export async function preprocess(filePath: string, code: string): Promise<Token[]> {
     let preprocessor = new Preprocessor();
     return preprocessor.preprocess(filePath, code);
 }
