@@ -236,9 +236,8 @@ function preMatcherToString(matcher: PreMatcher): string {
 }
 
 
-interface Macro {
+type Macro = {function: false, value: PreToken[]} | {function: true, args: string[], variadic: boolean, body: PreToken[]}
 
-}
 
 class Preprocessor extends BaseParser<PreToken, PreMatcher> {
 
@@ -451,6 +450,10 @@ class Preprocessor extends BaseParser<PreToken, PreMatcher> {
 
     pragma(): void {
     }
+    
+    replaceMacros(tokens: PreToken[]): PreToken[] {
+
+    }
 
     directive(): PreToken[] {
         while (this.match('whitespace') && !this.match('\n')) {
@@ -480,7 +483,7 @@ class Preprocessor extends BaseParser<PreToken, PreMatcher> {
             return out;
         }
         this.advance();
-        this.directive();
+        return this.directive();
     }
 
     preprocess(filePath: string, code: string): Token[] {
