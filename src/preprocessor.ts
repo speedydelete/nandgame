@@ -1,45 +1,19 @@
 
-// implements translation phases 1, 2, 3, 4, and 5
+// implements translation phases 1, 2, 3, 4, 5, and 6
 
 import * as path from 'node:path';
-import * as fs from 'node:fs/promises';
 
-import {PLACEHOLDER_POSITION, Position, BaseToken, BaseParser, EOF} from './base.js';
+import {simplePositionToString, MacroPositionData, Position, BaseDoer, BaseToken, EOF, BaseParser, a} from './base.js';
 
-
-export const KEYWORDS = new Set(['alignas', 'alignof', 'auto', 'bool', 'break', 'case', 'char', 'const', 'constexpr', 'continue', 'default', 'do', 'double', 'else', 'enum', 'extern', 'false', 'float', 'for', 'goto', 'if', 'inline', 'int', 'long', 'nullptr', 'register', 'restrict', 'short', 'signed', 'sizeof', 'static', 'static_assert', 'struct', 'switch', 'thread_local', 'true', 'typedef', 'typeof', 'typeof_unqual', 'union', 'unsigned', 'void', 'volatile', 'while', '_Atomic', '_BitInt', '_Complex', '_Decimal128', '_Decimal32', '_Decimal64', '_Generic', '_Imaginary', '_Noreturn', '_Alignas', '_Alignof', '_Bool', '_Static_assert', '_Thread_local'] as const);
-
-export type Keyword = typeof KEYWORDS extends Set<infer T> ? T : never;
-
-export const KEYWORD_ALIASES: {[key: string]: string} = Object.assign(Object.create(null), {
-    '_Alignas': 'alignas',
-    '_Alignof': 'alignof',
-    '_Bool': 'bool',
-    '_Static_assert': 'static_assert',
-    '_Thread_local': 'thread_local',
-});
 
 export const IDENTIFIER_REGEX = /^\p{XID_Start}\p{XID_Continue}*$/u;
 
 export const UNIVERSAL_CHARACTER_REGEX = /^(\\u[0-9A-Fa-f]{4}([0-9a-fA-F]{4})?)$/u;
 
-export const INTEGER_DECIMAL_CONSTANT_REGEX = /^([1-9]('?[0-9])*)/u;
-export const INTEGER_OCTAL_CONSTANT_REGEX = /^(0('?[0-7]*))/u;
-export const INTEGER_HEXADECIMAL_CONSTANT_REGEX = /^(0[xX][0-9a-fA-F]('?[0-9a-fA-F])*)/u;
-export const INTEGER_BINARY_CONSTANT_REGEX = /^(0[bB][01]('?[01])*)/u;
-export const INTEGER_CONSTANT_SUFFIX_REGEX = /^([uU](l|L|ll|LL|wb|WB|)|(l|L|ll|LL|wb|WB)[uU]?)/u;
-
-// digit-sequence: ([0-9]('?[0-9])*)
-// exponent-part: ([eE][+-]?([0-9]('?[0-9])*))
-export const DECIMAL_FLOATING_CONSTANT_REGEX = /^((([0-9]('?[0-9])*)?\.([0-9]('?[0-9])*)|([0-9]('?[0-9])*)\.)([eE][+-]?([0-9]('?[0-9])*))|([0-9]('?[0-9])*)([eE][+-]?([0-9]('?[0-9])*)))/u;
-// hexadecimal-digit-sequence: ([0-9a-fA-F]('?[0-9a-fA-F])*)
-// hexadecimal-fractional-constant: ([0-9a-fA-F]('?[0-9a-fA-F])*)?\.([0-9a-fA-F]('?[0-9a-fA-F])*)|([0-9a-fA-F]('?[0-9a-fA-F])*)\.
-// binary-exponent-part: ([pP][+-]?([0-9]('?[0-9])*))
-export const HEXADECIMAL_FLOATING_CONSTANT_REGEX = /^(0[xX](([0-9a-fA-F]('?[0-9a-fA-F])*)|([0-9a-fA-F]('?[0-9a-fA-F])*)?\.([0-9a-fA-F]('?[0-9a-fA-F])*)|([0-9a-fA-F]('?[0-9a-fA-F])*)\.)([pP][+-]?([0-9]('?[0-9])*)))/u;
-export const FLOATING_CONSTANT_SUFFIX_REGEX = /^(f|l|F|L|df|dd|dl|DF|DD|DL)/u;
+export type CharacterConstantPrefix = 'u8' | 'u' | 'U' | 'L';
 
 export const ESCAPE_SEQUENCE_REGEX = /^((\\)(['"?\\abfnrtv]|[0-7]{1,3}|x[0-9a-fA-F]+))/u;
-export const CHARACTER_CONSTANT_REGEX = /^((u8|u|U|L)'([^'\\]|((\\)(['"?\\abfnrtv]|[0-7]{1,3}|x[0-9a-fA-F]+)))+')/u;
+export const CHARACTER_CONSTANT_REGEX = /^((u8|u|U|L)'([^'\\]|((\\)(['"?\\abfnrtv0]|[0-7]{1,3}|x[0-9a-fA-F]+)))+')/u;
 
 export function parseEscapeSequence(value: string): string {
     value = value.slice(1);
@@ -59,6 +33,8 @@ export function parseEscapeSequence(value: string): string {
         return '\t';
     } else if (value === 'v') {
         return '\v';
+    } else if (value === '0') {
+        return '\0';
     } else if (value.startsWith('x')) {
         return String.fromCodePoint(parseInt(value.slice(1), 16));
     } else {
@@ -66,15 +42,17 @@ export function parseEscapeSequence(value: string): string {
     }
 }
 
-export function parseStringLiteral(value: string): string[] | false {
+export function parseStringLiteral(value: string): [number[], CharacterConstantPrefix | undefined] | false {
+    let prefix: CharacterConstantPrefix | undefined;
     let match = value.match(/^(u8|u|U|L)/);
     if (match) {
         value = value.slice(match[0].length);
+        prefix = match[0] as CharacterConstantPrefix;
     }
     if (!(value.startsWith('"') && value.endsWith('"'))) {
         return false;
     }
-    let out: string[] = [];
+    let out: number[] = [];
     // call Array.from here to use real Unicode characters
     let chars = Array.from(value.slice(1, -1));
     for (let i = 0; i < chars.length; i++) {
@@ -87,12 +65,12 @@ export function parseStringLiteral(value: string): string[] | false {
                 return false;
             }
             i += Array.from(match[0]).length - 1;
-            out.push(parseEscapeSequence(match[0]));
+            out.push(parseEscapeSequence(match[0]).codePointAt(0) as number);
         } else {
-            out.push(char);
+            out.push(char.codePointAt(0) as number);
         }
     }
-    return out;
+    return [out, prefix];
 }
 
 export const SYMBOLS = new Set([
@@ -107,22 +85,9 @@ export const SYMBOLS = new Set([
 
 export type CSymbol = typeof SYMBOLS extends Set<infer T> ? T : never;
 
-// resolved after preprocessing, during translation phase 7
-// because they behave differently under stringization
-export const SYMBOL_ALIASES: {[key: string]: string} = Object.assign(Object.create(null), {
-    '<:': '[',
-    ':>': ']',
-    '<%': '{',
-    '%>': '}',
-    '%:': '#',
-    '%:%:': '##',
-});
-
 export const HEADER_NAME_REGEX = /^(<[^\n>]*>|"[^\n>]*")$/u;
 
 export const PREPROCESSING_NUMBER_REGEX = /^(\.?[0-9](\p{XID_Continue}|'[0-9]|'[_a-zA-Z]|[eEpP][+-]|\.)*)$/u;
-
-
 
 
 export type Whitespace = ' ' | '\n' | '\t' | '\v' | '\f';
@@ -131,34 +96,16 @@ export type PreWhitespaceToken = BaseToken & {type: 'whitespace', value: Whitesp
 export type PreHeaderNameToken = BaseToken & {type: 'header-name', value: string};
 export type PreIdentifierToken = BaseToken & {type: 'identifier', value: string};
 export type PreNumberToken = BaseToken & {type: 'number', value: string};
-export type PreCharConstantToken = BaseToken & {type: 'char-constant', value: string};
-export type PreStringLiteralToken = BaseToken & {type: 'string-literal', value: string[], raw: string};
-export type PreSymbolToken = BaseToken & {type: 'symbol', value: CSymbol};
-export type PreUniversalCharToken = BaseToken & {type: 'universal-char', value: string};
+export type PreCharacterConstantToken = BaseToken & {type: 'char-constant', value: number, prefix?: CharacterConstantPrefix, raw: string};
+export type PreStringLiteralToken = BaseToken & {type: 'string-literal', value: number[], prefix?: CharacterConstantPrefix, raw: string};
+export type PreSymbolToken<T extends CSymbol = CSymbol> = BaseToken & {type: 'symbol', value: T};
+export type PreUniversalCharacterToken = BaseToken & {type: 'universal-char', value: string};
 export type PreOtherToken = BaseToken & {type: 'other', value: string};
+export type PrePlacemarkerToken = BaseToken & {type: 'placemarker'};
 
-export type PreToken = PreWhitespaceToken | PreHeaderNameToken | PreIdentifierToken | PreNumberToken | PreCharConstantToken | PreStringLiteralToken | PreSymbolToken | PreUniversalCharToken | PreOtherToken;
+export type PreToken = PreWhitespaceToken | PreHeaderNameToken | PreIdentifierToken | PreNumberToken | PreCharacterConstantToken | PreStringLiteralToken | PreSymbolToken | PreUniversalCharacterToken | PreOtherToken | PrePlacemarkerToken;
 
-type PreMatcher =
-    | EOF
-    | PreToken['type']
-    | Whitespace
-    | CSymbol
-    | `identifier ${string}`
-    | PreMatcher[]
-;
-
-type PreMatcherReturnType<T> =
-    T extends EOF ? EOF :
-    T extends PreToken['type'] ? Extract<PreToken, {type: T}> :
-    T extends Whitespace ? PreWhitespaceToken :
-    T extends CSymbol ? PreSymbolToken :
-    T extends `identifier ${string}` ? PreIdentifierToken :
-    // T extends (infer U)[] ? PreMatcherReturnType<U> :
-    never
-;
-
-const STRING_PRE_NAMES: {[K in Whitespace | PreToken['type']]: string} = {
+export const STRING_PRE_TOKEN_NAMES: {[K in Whitespace | PreToken['type']]: string} = {
     ' ': 'space',
     '\n': 'newline',
     '\t': 'tab',
@@ -173,11 +120,14 @@ const STRING_PRE_NAMES: {[K in Whitespace | PreToken['type']]: string} = {
     'symbol': 'symbol',
     'universal-char': 'universal character name',
     'other': 'other',
+    'placemarker': 'placemarker',
 };
 
 export function getPreTokenRaw(token: PreToken): string {
-    if (token.type === 'string-literal') {
+    if (token.type === 'char-constant' || token.type === 'string-literal') {
         return token.raw;
+    } else if (token.type === 'placemarker') {
+        return '';
     } else {
         return token.value;
     }
@@ -191,19 +141,36 @@ export function preTokenToString(token: PreToken | EOF): string {
     if (token === EOF) {
         return `end of file`;
     } else if (token.type === 'whitespace') {
-        return STRING_PRE_NAMES[token.value];
+        return STRING_PRE_TOKEN_NAMES[token.value];
     } else if (token.type === 'other') {
         return `'${token.value}'`;
+    } else if (token.type === 'placemarker') {
+        return `<placemarker>`;
     } else {
-        let out = `${STRING_PRE_NAMES[token.type]} `;
-        if (token.type === 'string-literal') {
-            out += token.raw;
-        } else {
-            out += `'${token.value}'`;
-        }
-        return out;
+        return `${STRING_PRE_TOKEN_NAMES[token.type]} ${getPreTokenRaw(token)}`;
     }
 }
+
+
+type PreMatcher =
+    | EOF
+    | PreToken['type']
+    | Whitespace
+    | CSymbol
+    | `identifier ${string}`
+    | PreMatcher[]
+;
+
+type PreMatcherReturnType<T extends PreMatcher> =
+    T extends EOF ? EOF :
+    T extends PreToken['type'] ? Extract<PreToken, {type: T}> :
+    T extends Whitespace ? PreWhitespaceToken :
+    T extends CSymbol ? PreSymbolToken<T> :
+    T extends `identifier ${string}` ? PreIdentifierToken :
+    // T extends (infer U)[] ? PreMatcherReturnType<U> :
+    T extends any[] ? PreToken :
+    never
+;
 
 function preMatcherToString(matcher: PreMatcher): string {
     if (matcher === EOF) {
@@ -214,7 +181,7 @@ function preMatcherToString(matcher: PreMatcher): string {
         } else if (matcher.startsWith('identifier ')) {
             return `identifier '${matcher.slice('identifier '.length)}'`;
         } else {
-            return STRING_PRE_NAMES[matcher as Whitespace | PreToken['type']];
+            return STRING_PRE_TOKEN_NAMES[matcher as Whitespace | PreToken['type']];
         }
     } else {
         let out = matcher.map(preMatcherToString);
@@ -232,16 +199,12 @@ function preMatcherToString(matcher: PreMatcher): string {
 
 
 type Macro = 
-    | {function: false, value: PreToken[]}
-    | {function: true, args: string[], variadic: boolean, value: PreToken[]}
+    | {name: string, function: false, value: PreToken[]}
+    | {name: string, function: true, args: string[], variadic: boolean, value: PreToken[]}
 ;
 
-const GLOBAL_CODE_PATH = '__global__';
-const GLOBAL_CODE = `
 
-`;
-
-class Preprocessor extends BaseParser<PreToken, PreMatcher> {
+export class Preprocessor extends BaseParser<PreToken, PreMatcher> {
 
     canHaveHeaderTokens: boolean = false;
 
@@ -249,7 +212,64 @@ class Preprocessor extends BaseParser<PreToken, PreMatcher> {
 
     macros: Map<string, Macro> = new Map();
 
-    pragmaOnced: Set<string> = new Set();
+    constructor(from: BaseDoer | undefined, compileDate: Date) {
+        super(from);
+        let data = new Map<string, PreToken[]>();
+        let pos = {file: '__builtin__', line: 1, col: 0};
+        let dateValue = `${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][compileDate.getUTCMonth()]} ${String(compileDate.getUTCDay()).padStart(2, '0')} ${String(compileDate.getUTCFullYear()).padStart(4, '0')}`;
+        data.set('__DATE__', [{pos, type: 'string-literal', value: Array.from(dateValue).map(x => x.codePointAt(0) as number), raw: dateValue}]);
+        let timeValue = `${String(compileDate.getUTCHours()).padStart(2, '0')}:${String(compileDate.getUTCMinutes()).padStart(2, '0')}:${String(compileDate.getUTCSeconds()).padStart(2, '0')}`;
+        data.set('__TIME__', [{pos, type: 'string-literal', value: Array.from(timeValue).map(x => x.codePointAt(0) as number), raw: timeValue}]);
+        data.set('__STDC__', [{pos, type: 'number', value: '0'}]);
+        data.set('__STDC_EMBED_NOT_FOUND__', [{pos, type: 'number', value: '0'}]);
+        data.set('__STDC_EMBED_FOUND__', [{pos, type: 'number', value: '1'}]);
+        data.set('__STDC_EMBED_EMPTY__', [{pos, type: 'number', value: '2'}]);
+        data.set('__STDC_HOSTED__', [{pos, type: 'number', value: '0'}]);
+        data.set('__STDC_UTF_16__', [{pos, type: 'number', value: '1'}]);
+        data.set('__STDC_UTF_32__', [{pos, type: 'number', value: '1'}]);
+        data.set('__STDC_VERSION__', [{pos, type: 'number', value: '202311L'}]);
+        data.set('__STDC_ISO_10646__', [{pos, type: 'number', value: '202012L'}]);
+        data.set('__STDC_NO_ATOMICS__', [{pos, type: 'number', value: '1'}]);
+        data.set('__STDC_NO_COMPLEX__', [{pos, type: 'number', value: '1'}]);
+        data.set('__STDC_NO_THREADS__', [{pos, type: 'number', value: '1'}]);
+        data.set('__STDC_NO_VLA__', [{pos, type: 'number', value: '1'}]);
+        for (let [key, value] of data) {
+            this.macros.set(key, {name: key, function: false, value});
+        }
+    }
+
+    peek<T extends Exclude<PreMatcher, EOF> = Exclude<PreMatcher, EOF>>(): PreMatcherReturnType<T> {
+        let out = this.tokens[this.pos];
+        if (out === undefined) {
+            this.error(`Unexpected end of input`);
+        } else {
+            return out as PreMatcherReturnType<T>;
+        }
+    }
+
+    peekOrEOF<T extends PreMatcher = PreMatcher>(): PreMatcherReturnType<T> | EOF {
+        return (this.tokens[this.pos] ?? EOF) as PreMatcherReturnType<T> | EOF;
+    }
+
+    advance<T extends Exclude<PreMatcher, EOF> = Exclude<PreMatcher, EOF>>(): PreMatcherReturnType<T> {
+        let out = this.tokens[this.pos];
+        if (out === undefined) {
+            this.error(`Unexpected end of input`);
+        } else {
+            this.pos++;
+            return out as PreMatcherReturnType<T>;
+        }
+    }
+
+    advanceOrEOF<T extends PreMatcher = PreMatcher>(): PreMatcherReturnType<T> | EOF {
+        let out = this.tokens[this.pos];
+        if (out === undefined) {
+            return EOF;
+        } else {
+            this.pos++;
+            return out as PreMatcherReturnType<T>;
+        }
+    }
 
     _match(token: PreToken | EOF, matcher: PreMatcher): boolean {
         if (matcher === EOF) {
@@ -278,9 +298,9 @@ class Preprocessor extends BaseParser<PreToken, PreMatcher> {
         this.error(`Expected ${preMatcherToString(matcher)}, got ${preTokenToString(token)}`);
     }
 
-    eat<T extends PreMatcher>(matcher: T): PreMatcherReturnType<T> {
+    eat<T extends Exclude<PreMatcher, EOF>>(matcher: T): PreMatcherReturnType<T> {
         this.expect(matcher);
-        return this.advance() as PreMatcherReturnType<T>;
+        return this.advance<T>();
     }
 
     tryToConvertToSingleToken(pos: Position, value: string): PreToken | false {
@@ -289,8 +309,8 @@ class Preprocessor extends BaseParser<PreToken, PreMatcher> {
             return {pos, type: 'header-name', value};
         }
         let string = parseStringLiteral(value);
-        if (Array.isArray(string)) {
-            return {pos, type: 'string-literal', value: string, raw: value};
+        if (string !== false) {
+            return {pos, type: 'string-literal', value: string[0], prefix: string[1], raw: value};
         }
         if (value === ' ' || value === '\n' || value === '\t' || value === '\v' || value === '\f') {
             return {pos, type: 'whitespace', value};
@@ -299,7 +319,10 @@ class Preprocessor extends BaseParser<PreToken, PreMatcher> {
         } else if (value.match(PREPROCESSING_NUMBER_REGEX)) {
             return {pos, type: 'number', value};
         } else if (value.match(CHARACTER_CONSTANT_REGEX)) {
-            return {pos, type: 'char-constant', value};
+            let prefix = value.slice(0, value.indexOf(`'`)) as CharacterConstantPrefix;
+            let array = Array.from(value);
+            let number = array[array.indexOf(`'`) + 1].codePointAt(0) as number;
+            return {pos, type: 'char-constant', value: number, prefix, raw: value};
         } else if (SYMBOLS.has(value as CSymbol)) {
             return {pos, type: 'symbol', value: value as CSymbol};
         } else if (value.match(UNIVERSAL_CHARACTER_REGEX)) {
@@ -446,7 +469,7 @@ class Preprocessor extends BaseParser<PreToken, PreMatcher> {
             out.push({pos: {file: this.currentFilePath, line: lineNumber, col}, type: 'whitespace', value: '\n'});
         }
         if (multiLineComment) {
-            this.error(`Unterminated multi-line comment`, multiLineComment);
+            this.error(multiLineComment, `Unterminated multi-line comment`);
         }
         return out;
     }
@@ -457,22 +480,34 @@ class Preprocessor extends BaseParser<PreToken, PreMatcher> {
         }
     }
 
-    expandMacros(tokens: PreToken[]): PreToken[] {
-        let out: PreToken[] = [];
-        for (let token of tokens) {
-            if (token.type === 'identifier' && this.macros.has(token.value)) {
-                let macro = this.macros.get(token.value) as Macro;
-                if (macro.function) {
-                    
-                } else {
-                    for (let token of macro.value) {
-                        out.push(token);
+    balancedParenthesesCall(): PreToken[][] {
+        this.eat('(');
+        let parenCount = 1;
+        let out: PreToken[][] = [];
+        let current: PreToken[] = [];
+        while (parenCount > 0) {
+            let token = this.advance();
+            if (token.type === 'symbol') {
+                if (token.value === '(') {
+                    parenCount++;
+                    current.push(token);
+                } else if (token.value === ')') {
+                    parenCount--;
+                    if (parenCount !== 0) {
+                        current.push(token);
                     }
+                } else if (token.value === ',' && parenCount === 1) {
+                    current.push(token);
+                    out.push(current);
+                    current = [];
+                } else {
+                    current.push(token);
                 }
             } else {
-                out.push(token);
+                current.push(token);
             }
         }
+        out.push(current);
         return out;
     }
 
@@ -493,14 +528,227 @@ class Preprocessor extends BaseParser<PreToken, PreMatcher> {
                 if (last === undefined) {
                     return out;
                 } else if (value !== last.value) {
-                    this.error(`Unmatched ${preTokenToString(token)}`, token.pos);
+                    this.error(token, `Unmatched ${preTokenToString(token)}`);
                 }
             }
             out.push(token);
         }
         let last = stack.pop();
         if (last !== undefined) {
-            this.error(`Unmatched ${preTokenToString(last)}`, last.pos);
+            this.error(last, `Unmatched ${preTokenToString(last)}`);
+        }
+        return out;
+    }
+
+    expandFunctionMacro(macro: Macro & {function: true}): PreToken[] {
+        let startPos = this.getCurrentPosition();
+        let argData = this.balancedParenthesesCall();
+        let variadicArgs: PreToken[] = [];
+        if (argData.length !== macro.args.length) {
+            if (macro.variadic && argData.length > macro.args.length) {
+                variadicArgs = argData.slice(macro.args.length).flat();
+                argData = argData.slice(0, macro.args.length);
+            } else {
+                this.error(startPos, `Invalid number of arguments for call of macro '${macro.name}' (expected ${macro.variadic ? 'at least ' : ''}${macro.args.length}, got ${argData.length})`);
+            }
+        }
+        let args = new Map<string, PreToken[]>();
+        for (let i = 0; i < macro.args.length; i++) {
+            args.set(macro.args[i], argData[i]);
+        }
+        let data = macro.value;
+        let out: PreToken[] = [];
+        // we don't need to call structuredClone in here because it is called later on
+        for (let i = 0; i < data.length; i++) {
+            let token = data[i];
+            if (token.type === 'identifier') {
+                let argValue = args.get(token.value);
+                if (argValue !== undefined) {
+                    // deal with ## operator
+                    if (argValue.length === 0) {
+                        let prev = data[i - 1];
+                        let next = data[i + 1];
+                        if ((prev?.type === 'symbol' && prev?.value === '##') || (next?.type === 'symbol' && next?.value === '##')) {
+                            out.push({pos: token.pos, type: 'placemarker'});
+                        }
+                    } else {
+                        for (let token of argValue) {
+                            out.push(token);
+                        }
+                    }
+                } else if (token.value === '__VA_ARGS__') {
+                    if (!macro.variadic) {
+                        this.error(token, `__VA_ARGS__ outside of variadic macro`);
+                    }
+                    if (variadicArgs.length === 0) {
+                        out.push({pos: token.pos, type: 'placemarker'});
+                    } else {
+                        for (let token of variadicArgs) {
+                            out.push(token);
+                        }
+                    }
+                } else if (token.value === '__VA_OPT__') {
+                    if (!macro.variadic) {
+                        this.error(token, `__VA_OPT__ outside of variadic macro`);
+                    }
+                    i++;
+                    let next = data[i];
+                    if (!(next.type === 'symbol' && next.value === '(')) {
+                        this.error(next, `Expected '(' after __VA_OPT__`);
+                    }
+                    let value: PreToken[] = [];
+                    let parenCount = 1;
+                    while (parenCount > 0 && i < data.length) {
+                        let token = data[i];
+                        if (token.type === 'symbol') {
+                            if (token.value === '(') {
+                                parenCount++;
+                                value.push(token);
+                            } else if (token.value === ')') {
+                                parenCount--;
+                                if (parenCount !== 0) {
+                                    value.push(token);
+                                }
+                            } else {
+                                value.push(token);
+                            }
+                        } else {
+                            value.push(token);
+                        }
+                        i++;
+                    }
+                    if (i === data.length && parenCount > 0) {
+                        this.error(next, `No closing parenthesis found for __VA_OPT__ invocation`);
+                    }
+                    if (variadicArgs.length > 0) {
+                        for (let token of value) {
+                            out.push(token);
+                        }
+                    }
+                } else {
+                    out.push(token);
+                }
+            } else if (token.type === 'symbol' && token.value === '#') {
+                i++;
+                let arg = data[i];
+                if (!(arg && arg.type === 'identifier')) {
+                    this.error(token, `Expected identifier argument for # operator`);
+                }
+                let tokens = args.get(arg.value);
+                if (!tokens) {
+                    this.error(arg, `Argument to # operator is not an argument of the macro`);
+                }
+                let string: PreStringLiteralToken = {pos: token.pos, type: 'string-literal', value: [], raw: ''};
+                tokens = tokens.filter(token => token.type !== 'placemarker');
+                while (tokens[0]?.type === 'whitespace') {
+                    tokens.shift();
+                }
+                while (tokens[tokens.length - 1]?.type === 'whitespace') {
+                    tokens.pop();
+                }
+                let wasWhitespace = false;
+                for (let token of tokens) {
+                    if (token.type === 'whitespace') {
+                        if (!wasWhitespace) {
+                            wasWhitespace = true;
+                            
+                        }
+                        string.value.push(' '.codePointAt(0) as number);
+                        string.raw += ' ';
+                    } else {
+                        wasWhitespace = false;
+                        let tokenRaw = getPreTokenRaw(token);
+                        // use for/of to iterate over real Unicode characters
+                        for (let char of tokenRaw) {
+                            string.value.push(char.codePointAt(0) as number);
+                        }
+                        string.raw += tokenRaw.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
+                    }
+                }
+                out.push(string);
+            } else {
+                out.push(token);
+            }
+        }
+        return out;
+    }
+
+    expandMacros(tokens: PreToken[], forbidden: Set<string> = new Set()): PreToken[] {
+        let out: PreToken[] = [];
+        for (let token of tokens) {
+            if (token.type === 'identifier' && token.value === '__FILE__') {
+                out.push({pos: token.pos, type: 'string-literal', value: Array.from(token.pos.file).map(x => x.codePointAt(0) as number), raw: token.pos.file.replaceAll('\\', '\\\\').replaceAll('"', '\\"')});
+            } else if (token.type === 'identifier' && token.value === '__LINE__') {
+                out.push({pos: token.pos, type: 'number', value: String(token.pos.line)});
+            } else if (token.type === 'identifier' && this.macros.has(token.value)) {
+                let macro = this.macros.get(token.value) as Macro;
+                let expanded: PreToken[] = [];
+                if (macro.function) {
+                    for (let token of this.expandFunctionMacro(macro)) {
+                        expanded.push(token);
+                    }
+                } else {
+                    for (let token of macro.value) {
+                        expanded.push(token);
+                    }
+                }
+                // add error messages before ## operator resolution for better ## operator error messages 
+                let toInsert: MacroPositionData[];
+                if (token.pos.macro) {
+                    toInsert = token.pos.macro;
+                } else {
+                    toInsert = [];
+                }
+                toInsert.splice(0, 0, {name: macro.name, pos: token.pos});
+                expanded = expanded.map(token => {
+                    token = structuredClone(token);
+                    if (!token.pos.macro) {
+                        token.pos.macro = [];
+                    }
+                    token.pos.macro = toInsert.concat(token.pos.macro);
+                    return token;
+                });
+                // deal with ## operator
+                for (let i = 0; i < expanded.length; i++) {
+                    let token = expanded[i];
+                    if (token.type === 'symbol' && token.value === '##') {
+                        if (i === 0) {
+                            this.error(token, `## operator at start of replacement list`);
+                        } else if (i === expanded.length - 1) {
+                            this.error(token, `## operator at end of replacement list`);
+                        }
+                        let prev = expanded[i - 1];
+                        let next = expanded[i + 1];
+                        let value: PreToken;
+                        if (prev.type === 'placemarker') {
+                            if (next.type === 'placemarker') {
+                                value = {pos: token.pos, type: 'placemarker'};
+                            } else {
+                                value = next;
+                            }
+                        } else if (next.type === 'placemarker') {
+                            value = prev;
+                        } else {
+                            let possible = this.tryToConvertToSingleToken(token.pos, getPreTokenRaw(prev) + ' ' + getPreTokenRaw(next));
+                            if (!possible) {
+                                this.error(token, `Cannot convert ## operator result to single preprocessing token`);
+                            }
+                            value = possible;
+                        }
+                        expanded = expanded.splice(i - 1, 3, value);
+                        i -= 1;
+                    }
+                }
+                expanded = expanded.filter(token => token.type !== 'placemarker');
+                forbidden.add(macro.name);
+                expanded = this.expandMacros(expanded, forbidden);
+                forbidden.delete(macro.name);
+                for (let token of expanded) {
+                    out.push(token);
+                }
+            } else {
+                out.push(token);
+            }
         }
         return out;
     }
@@ -544,18 +792,18 @@ class Preprocessor extends BaseParser<PreToken, PreMatcher> {
         let system: boolean;
         if (name.startsWith('<')) {
             if (!name.endsWith('>')) {
-                this.error(`No closing bracket for opening one`, nameToken.pos);
+                this.error(nameToken, `No closing bracket for opening one`);
             }
             name = name.slice(1, -1);
             system = true;
         } else if (name.startsWith('"')) {
             if (!name.endsWith('"')) {
-                this.error(`No closing quote for opening one`, nameToken.pos);
+                this.error(nameToken, `No closing quote for opening one`);
             }
             name = name.slice(1, -1);
             system = false;
         } else {
-            this.error(`Expected header name`, nameToken.pos);
+            this.error(nameToken, `Expected header name`);
         }
         if (system) {
             name = path.resolve(name, path.join(import.meta.dirname, '..', 'include'));
@@ -569,8 +817,17 @@ class Preprocessor extends BaseParser<PreToken, PreMatcher> {
 
     }
 
-    async pragma(): Promise<void> {
+    pragmaOncedFiles: Set<string> = new Set();
 
+    async pragma(): Promise<PreToken[]> {
+        if (this.match('identifier STDC')) {
+            this.error(`Standard pragmas are not supported yet`);
+        } else if (this.match('identifier once')) {
+            this.pragmaOncedFiles.add(this.currentFilePath);
+        } else {
+            this.error(`Unknown pragma`);
+        }
+        return [];
     }
 
     eatIfSection(): void {
@@ -583,7 +840,7 @@ class Preprocessor extends BaseParser<PreToken, PreMatcher> {
                 this.advance();
                 this.eatNonNewlineWhitespace();
                 if (this.match('identifier')) {
-                    let directive = this.advance().value;
+                    let directive = (this.advance<'identifier'>()).value;
                     if (directive === 'if' || directive === 'ifdef' || directive === 'ifndef') {
                         level++;
                     } else if (directive === 'endif') {
@@ -682,13 +939,13 @@ class Preprocessor extends BaseParser<PreToken, PreMatcher> {
         this.eatNonNewlineWhitespace();
         this.eat('\n');
         // get and parse the file
+        if (this.pragmaOncedFiles.has(name)) {
+            return;
+        }
         let oldPath = this.currentFilePath;
-        let oldPos = this.pos;
         this.currentFilePath = name;
-        this.pos = 0;
-        let newTokens = this.tokenize((await fs.readFile(name)).toString());
+        let newTokens = this.tokenize((await this.getFile(name)).toString());
         this.currentFilePath = oldPath;
-        this.pos = oldPos;
         // splice the token list, deleting the directive in the process
         let after = this.tokens.slice(this.pos);
         this.tokens = this.tokens.slice(0, startPos);
@@ -737,7 +994,7 @@ class Preprocessor extends BaseParser<PreToken, PreMatcher> {
             this.eatNonNewlineWhitespace();
         }
         this.eat('\n');
-        let data = new Uint8Array(await fs.readFile(name));
+        let data = await this.getFile(name);
         if (data.length === 0) {
             if (ifEmpty) {
                 return ifEmpty;
@@ -831,7 +1088,7 @@ class Preprocessor extends BaseParser<PreToken, PreMatcher> {
             while (tokens[tokens.length - 1].type === 'whitespace') {
                 tokens.pop();
             }
-            macro = {function: true, args, variadic, value: tokens};
+            macro = {name, function: true, args, variadic, value: tokens};
         } else {
             this.eatNonNewlineWhitespace();
             let tokens: PreToken[] = [];
@@ -842,7 +1099,7 @@ class Preprocessor extends BaseParser<PreToken, PreMatcher> {
             while (tokens[tokens.length - 1].type === 'whitespace') {
                 tokens.pop();
             }
-            macro = {function: false, value: tokens};
+            macro = {name, function: false, value: tokens};
         }
         let old = this.macros.get(name);
         if (old !== undefined) {
@@ -862,7 +1119,7 @@ class Preprocessor extends BaseParser<PreToken, PreMatcher> {
                 }
             }
             if (!fine) {
-                this.error(`Non-identical redefinition of macro '${name}'`, nameToken.pos);
+                this.error(nameToken, `Non-identical redefinition of macro '${name}'`);
             }
         }
         this.macros.set(name, macro);
@@ -874,6 +1131,53 @@ class Preprocessor extends BaseParser<PreToken, PreMatcher> {
         this.macros.delete(name);
         this.eatNonNewlineWhitespace();
         this.eat('\n');
+    }
+
+    lineDirective(): void {
+        this.expandMacrosInCurrentLine();
+        this.eatNonNewlineWhitespace();
+        let newLineNumberToken = this.eat('number');
+        if (!newLineNumberToken.value.match(/^([0-9]('?[0-9])*)$/)) {
+            this.error(newLineNumberToken, `Invalid line number for #line`);
+        }
+        let newLineNumber = Number(newLineNumberToken.value.replaceAll(`'`, ''));
+        this.eatNonNewlineWhitespace();
+        let newFile: string | undefined = undefined;
+        if (this.match('string-literal')) {
+            newFile = this.eat('string-literal').value.join('');
+        }
+        this.eatNonNewlineWhitespace();
+        this.eat('\n');
+        if (this.isAtEnd()) {
+            return;
+        }
+        let startOldLineNumber = this.peek().pos.line;
+        for (let token of this.tokens.slice(this.pos)) {
+            token.pos.line = token.pos.line - startOldLineNumber + newLineNumber;
+            if (newFile) {
+                token.pos.file = newFile;
+            }
+        }
+    }
+
+    errorDirective(): void {
+        let pos = this.peek().pos;
+        let out = '';
+        while (!this.match('\n')) {
+            out += getPreTokenRaw(this.advance());
+        }
+        this.eat('\n');
+        this.error(pos, `Error directive: ${out}`);
+    }
+
+    warningDirective(): void {
+        let pos = this.peek().pos;
+        let out = '';
+        while (!this.match('\n')) {
+            out += getPreTokenRaw(this.advance());
+        }
+        this.eat('\n');
+        console.warn(`Warning directive: ${out}\n    at ${simplePositionToString(pos)}`);
     }
 
     async directive(): Promise<PreToken[]> {
@@ -891,7 +1195,7 @@ class Preprocessor extends BaseParser<PreToken, PreMatcher> {
         if (directive === 'if' || directive === 'ifdef' || directive === 'ifndef') {
             return this.conditionalCompilationDirective(directive);
         } else if (directive === 'elif' || directive === 'elifdef' || directive === 'elifndef' || directive === 'else' || directive === 'endif') {
-            this.error(`Invalid location for #${directive} directive`, directiveToken.pos);
+            this.error(directiveToken, `Invalid location for #${directive} directive`);
         } else if (directive === 'include') {
             await this.includeDirective(startPos);
         } else if (directive === 'embed') {
@@ -900,8 +1204,16 @@ class Preprocessor extends BaseParser<PreToken, PreMatcher> {
             this.defineDirective();
         } else if (directive === 'undef') {
             this.undefDirective();
+        } else if (directive === 'line') {
+            this.lineDirective();
+        } else if (directive === 'error') {
+            this.errorDirective();
+        } else if (directive === 'warning') {
+            this.warningDirective();
+        } else if (directive === 'pragma') {
+            return await this.pragma();
         } else {
-            this.error(`Invalid directive: '#${directive}'`, directiveToken.pos);
+            this.error(directiveToken, `Invalid directive: '#${directive}'`);
         }
         return [];
     }
@@ -920,7 +1232,34 @@ class Preprocessor extends BaseParser<PreToken, PreMatcher> {
     }
 
     async resolvePragmaOperator(): Promise<PreToken[]> {
-
+        let out: PreToken[] = [];
+        while (!this.isAtEnd()) {
+            if (this.match('identifier _Pragma')) {
+                this.advance();
+                this.eat('(');
+                let pragmaToken = this.eat('string-literal');
+                this.eat(')');
+                let newTokens = this.tokenize(pragmaToken.value.join('')).map(token => {
+                    token.pos = structuredClone(pragmaToken.pos);
+                    return token;
+                });
+                let after = this.tokens.slice(this.pos);
+                this.tokens = this.tokens.slice(0, this.pos);
+                for (let token of newTokens) {
+                    this.tokens.push(token);
+                }
+                this.tokens.push({pos: structuredClone(pragmaToken.pos), type: 'whitespace', value: '\n'});
+                for (let token of after) {
+                    this.tokens.push(token);
+                }
+                for (let token of await this.pragma()) {
+                    out.push(token);
+                }
+            } else {
+                out.push(this.advance());
+            }
+        }
+        return out;
     }
 
     async preprocess(filePath: string, code: string): Promise<PreToken[]> {
@@ -938,15 +1277,20 @@ class Preprocessor extends BaseParser<PreToken, PreMatcher> {
         this.tokens = newTokens;
         this.pos = 0;
         newTokens = await this.resolvePragmaOperator();
-        return newTokens;
+        // translation phase 6
+        let out: PreToken[] = [];
+        for (let token of newTokens) {
+            let prev = out[out.length - 1];
+            if (token.type === 'string-literal' && prev?.type === 'string-literal') {
+                for (let char of token.value) {
+                    prev.value.push(char);
+                }
+                prev.raw += token.raw;
+            } else {
+                out.push(token);
+            }
+        }
+        return out;
     }
 
-}
-
-
-export async function preprocess(filePath: string, code: string): Promise<PreToken[]> {
-    let preprocessor = new Preprocessor();
-    preprocessor.preprocess(GLOBAL_CODE_PATH, GLOBAL_CODE);
-    let out = preprocessor.preprocess(filePath, code);
-    return out;
 }

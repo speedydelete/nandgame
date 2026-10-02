@@ -1,6 +1,4 @@
 
-import './globals.d.ts';
-
 import {preprocess} from './preprocessor.js';
 
 

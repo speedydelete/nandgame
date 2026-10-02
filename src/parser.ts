@@ -1,19 +1,622 @@
 
-import {Position, BaseToken, BaseParser} from './base.js';
-import {Keyword, CSymbol, PreToken} from './preprocessor.js';
+// implements the first part of translation phase 7
+// converts preprocessing tokens to tokens and builds the AST
+
+import {Position, CError, BaseDoer, BaseToken, EOF, BaseParser, t, Type, Scope, a} from './base.js';
+import {SYMBOLS, CSymbol, CharacterConstantPrefix, PreToken} from './preprocessor.js';
 
 
-export type Token = BaseToken & (
-    | {type: 'keyword', value: Keyword}
-    | {type: 'identifier', value: string}
-    | {type: 'int-constant', value: bigint, suffix?: string, raw: string}
-    | {type: 'float-constant', value: number, raw: string}
-    | {type: 'char-constant', value: string}
-    | {type: 'string-literal', value: string}
-    | {type: 'symbol', value: CSymbol}
-);
+export const KEYWORDS = new Set(['alignas', 'alignof', 'auto', 'bool', 'break', 'case', 'char', 'const', 'constexpr', 'continue', 'default', 'do', 'double', 'else', 'enum', 'extern', 'false', 'float', 'for', 'goto', 'if', 'inline', 'int', 'long', 'nullptr', 'register', 'restrict', 'short', 'signed', 'sizeof', 'static', 'static_assert', 'struct', 'switch', 'thread_local', 'true', 'typedef', 'typeof', 'typeof_unqual', 'union', 'unsigned', 'void', 'volatile', 'while', '_Atomic', '_BitInt', '_Complex', '_Decimal128', '_Decimal32', '_Decimal64', '_Generic', '_Imaginary', '_Noreturn', '_Alignas', '_Alignof', '_Bool', '_Static_assert', '_Thread_local'] as const);
+
+export type Keyword = typeof KEYWORDS extends Set<infer T> ? T : never;
 
 
-export class Parser extends BaseParser<Token> {
+export type KeywordToken<T extends Keyword = Keyword> = BaseToken & {type: 'keyword', value: T, raw: string};
+export type IdentifierToken = BaseToken & {type: 'identifier', value: string};
+export type IntegerConstantSuffix = 'l' | 'll' | 'wb' | 'u' | 'ul' | 'ull' | 'uwb';
+export type IntConstantToken = BaseToken & {type: 'integer-constant', value: bigint, suffix?: IntegerConstantSuffix, raw: string};
+export type FloatingConstantSuffix = 'f' | 'l' | 'df' | 'dd' | 'dl';
+export type FloatingConstantToken = BaseToken & {type: 'floating-constant', value: number, suffix?: FloatingConstantSuffix, raw: string};
+export type CharConstantToken = BaseToken & {type: 'character-constant', value: number, prefix?: CharacterConstantPrefix, raw: string};
+export type StringLiteralToken = BaseToken & {type: 'string-literal', value: number[], prefix?: CharacterConstantPrefix, raw: string};
+export type SymbolToken<T extends CSymbol = CSymbol> = BaseToken & {type: 'symbol', value: T, raw: string};
+
+export type Token = KeywordToken | IdentifierToken | IntConstantToken | FloatingConstantToken | CharConstantToken | StringLiteralToken | SymbolToken;
+
+export const STRING_TOKEN_NAMES: {[K in Token['type']]: string} = {
+    'keyword': 'keyword',
+    'identifier': 'identifier',
+    'integer-constant': 'integer constant',
+    'floating-constant': 'floating-point constant',
+    'character-constant': 'character constant',
+    'string-literal': 'string literal',
+    'symbol': 'symbol',
+};
+
+export function getTokenRaw(token: Token): string {
+    if (token.type === 'keyword' || token.type === 'integer-constant' || token.type === 'floating-constant' || token.type === 'character-constant' || token.type === 'string-literal' || token.type === 'symbol') {
+        return token.raw;
+    } else {
+        return token.value;
+    }
+}
+
+export function rawStringifyTokens(tokens: Token[]): string {
+    return tokens.map(getTokenRaw).toString();
+}
+
+export function tokenToString(token: Token | EOF): string {
+    if (token === EOF) {
+        return `end of file`;
+    } else {
+        return `${STRING_TOKEN_NAMES[token.type]} '${getTokenRaw(token)}'`;
+    }
+}
+
+
+type Matcher = 
+    | EOF
+    | Token['type']
+    | Keyword
+    | CSymbol
+    | `identifier ${string}`
+    | Matcher[]
+;
+
+type MatcherReturnType<T extends Matcher> =
+    T extends EOF ? EOF :
+    T extends Token['type'] ? Extract<Token, {type: T}> :
+    T extends Keyword ? KeywordToken :
+    T extends CSymbol ? SymbolToken<T> :
+    T extends `identifier ${string}` ? IdentifierToken :
+    // T extends (infer U)[] ? MatcherReturnType<U> :
+    T extends any[] ? Token :
+    never
+;
+
+function matcherToString(matcher: Matcher): string {
+    if (matcher === EOF) {
+        return `end of file`;
+    } else if (typeof matcher === 'string') {
+        if (KEYWORDS.has(matcher as Keyword)) {
+            return `keyword '${matcher}'`;
+        } else if (SYMBOLS.has(matcher as CSymbol)) {
+            return `symbol '${matcher}'`;
+        } else if (matcher.startsWith('identifier ')) {
+            return `identifier '${matcher.slice('identifier '.length)}'`;
+        } else {
+            return STRING_TOKEN_NAMES[matcher as Token['type']];
+        }
+    } else {
+        let out = matcher.map(matcherToString);
+        if (out.length === 0) {
+            return `nothing`;
+        } else if (out.length === 1) {
+            return out[0];
+        } else if (out.length === 2) {
+            return `${out[0]} or ${out[1]}`;
+        } else {
+            return `${out.slice(0, -1).join(', ')}, or ${out[out.length - 1]}`;
+        }
+    }
+}
+
+
+export class Parser extends BaseParser<Token, Matcher> {
+
+    scope: Scope;
+
+    constructor(from?: BaseDoer) {
+        super(from);
+        this.scope = new Scope(false);
+    }
+
+    peek<T extends Exclude<Matcher, EOF> = Exclude<Matcher, EOF>>(): MatcherReturnType<T> {
+        let out = this.tokens[this.pos];
+        if (out === undefined) {
+            this.error(`Unexpected end of input`);
+        } else {
+            return out as MatcherReturnType<T>;
+        }
+    }
+
+    peekOrEOF<T extends Matcher = Matcher>(): MatcherReturnType<T> | EOF {
+        return (this.tokens[this.pos] ?? EOF) as MatcherReturnType<T> | EOF;
+    }
+
+    advance<T extends Exclude<Matcher, EOF> = Exclude<Matcher, EOF>>(): MatcherReturnType<T> {
+        let out = this.tokens[this.pos];
+        if (out === undefined) {
+            this.error(`Unexpected end of input`);
+        } else {
+            this.pos++;
+            return out as MatcherReturnType<T>;
+        }
+    }
+
+    advanceOrEOF<T extends Matcher = Matcher>(): MatcherReturnType<T> | EOF {
+        let out = this.tokens[this.pos];
+        if (out === undefined) {
+            return EOF;
+        } else {
+            this.pos++;
+            return out as MatcherReturnType<T>;
+        }
+    }
+
+    _match(token: Token | EOF, matcher: Matcher): boolean {
+        if (matcher === EOF) {
+            return token === EOF;
+        } else if (token === EOF) {
+            return false;
+        } else if (typeof matcher === 'string') {
+            if (KEYWORDS.has(matcher as Keyword)) {
+                return token.type === 'keyword' && token.value === matcher;
+            } else if (SYMBOLS.has(matcher as CSymbol)) {
+                return token.type === 'symbol' && token.value === matcher;
+            } else if (matcher.startsWith('identifier ')) {
+                return token.type === 'identifier' && token.value === matcher.slice('identifier '.length);
+            } else {
+                return token.type === matcher;
+            }
+        } else {
+            return matcher.some(value => this._match(token, value));
+        }
+    }
+
+    _expect(token: Token | EOF, matcher: Matcher): void {
+        if (this._match(token, matcher)) {
+            return;
+        }
+        this.error(`Expected ${matcherToString(matcher)}, got ${tokenToString(token)}`);
+    }
+
+    eat<T extends Exclude<Matcher, EOF>>(matcher: T): MatcherReturnType<T> {
+        this.expect(matcher);
+        return this.advance<T>();
+    }
+
+    readonly KEYWORD_ALIASES: {[key: string]: Keyword} = Object.assign(Object.create(null), {
+        '_Alignas': 'alignas',
+        '_Alignof': 'alignof',
+        '_Bool': 'bool',
+        '_Static_assert': 'static_assert',
+        '_Thread_local': 'thread_local',
+    } satisfies {[key: string]: Keyword});
+
+    readonly INTEGER_DECIMAL_CONSTANT_REGEX = /^([1-9]('?[0-9])*)$/u;
+    readonly INTEGER_OCTAL_CONSTANT_REGEX = /^(0('?[0-7]*))$/u;
+    readonly INTEGER_HEXADECIMAL_CONSTANT_REGEX = /^(0[xX][0-9a-fA-F]('?[0-9a-fA-F])*)$/u;
+    readonly INTEGER_BINARY_CONSTANT_REGEX = /^(0[bB][01]('?[01])*)$/u;
+    readonly INTEGER_CONSTANT_SUFFIX_REGEX = /([uU](l|L|ll|LL|wb|WB|)|(l|L|ll|LL|wb|WB)[uU]?)$/u;
+
+    // digit-sequence: ([0-9]('?[0-9])*)
+    // exponent-part: ([eE][+-]?([0-9]('?[0-9])*))
+    readonly DECIMAL_FLOATING_CONSTANT_REGEX = /^((([0-9]('?[0-9])*)?\.([0-9]('?[0-9])*)|([0-9]('?[0-9])*)\.)([eE][+-]?([0-9]('?[0-9])*))|([0-9]('?[0-9])*)([eE][+-]?([0-9]('?[0-9])*)))$/u;
+    // hexadecimal-digit-sequence: ([0-9a-fA-F]('?[0-9a-fA-F])*)
+    // hexadecimal-fractional-constant: ([0-9a-fA-F]('?[0-9a-fA-F])*)?\.([0-9a-fA-F]('?[0-9a-fA-F])*)|([0-9a-fA-F]('?[0-9a-fA-F])*)\.
+    // binary-exponent-part: ([pP][+-]?([0-9]('?[0-9])*))
+    readonly HEXADECIMAL_FLOATING_CONSTANT_REGEX = /^(0[xX](([0-9a-fA-F]('?[0-9a-fA-F])*)|([0-9a-fA-F]('?[0-9a-fA-F])*)?\.([0-9a-fA-F]('?[0-9a-fA-F])*)|([0-9a-fA-F]('?[0-9a-fA-F])*)\.)([pP][+-]?([0-9]('?[0-9])*)))$/u;
+    readonly FLOATING_CONSTANT_SUFFIX_REGEX = /(f|l|F|L|df|dd|dl|DF|DD|DL)$/u;
+
+    // resolved after preprocessing, during translation phase 7
+    // because they behave differently under stringization
+    readonly SYMBOL_ALIASES: {[key: string]: CSymbol} = Object.assign(Object.create(null), {
+        '<:': '[',
+        ':>': ']',
+        '<%': '{',
+        '%>': '}',
+        '%:': '#',
+        '%:%:': '##',
+    }) satisfies {[key: string]: CSymbol};
+
+    convertFromPreprocessing(tokens: PreToken[]): Token[] {
+        let out: Token[] = [];
+        for (let token of tokens) {
+            let pos = token.pos;
+            if (token.type === 'whitespace') {
+                continue;
+            } else if (token.type === 'header-name') {
+                throw new Error(`This error should not occur, please report it (header name token present after preprocesing)`);
+            } else if (token.type === 'identifier') {
+                if (KEYWORDS.has(token.value as Keyword)) {
+                    let value = token.value as Keyword;
+                    if (value in this.KEYWORD_ALIASES) {
+                        value = this.KEYWORD_ALIASES[value];
+                    }
+                    out.push({pos, type: 'keyword', value, raw: token.value});
+                } else {
+                    out.push({pos, type: 'identifier', value: token.value});
+                }
+            } else if (token.type === 'number') {
+                let value = token.value;
+                let raw = value;
+                let match: RegExpMatchArray | null;
+                let suffix: IntegerConstantSuffix | undefined;
+                if (match = value.match(this.INTEGER_CONSTANT_SUFFIX_REGEX)) {
+                    let unsigned = match[0].includes('u') ? 'u' : '';
+                    suffix = (unsigned + match[0].replaceAll('u', '').toLowerCase()) as IntegerConstantSuffix;
+                    value = value.slice(0, -match[0].length);
+                }
+                let parsingPrefix: string | undefined = undefined;
+                if (value.match(this.INTEGER_DECIMAL_CONSTANT_REGEX)) {
+                    parsingPrefix = '';
+                } else if (value.match(this.INTEGER_OCTAL_CONSTANT_REGEX)) {
+                    parsingPrefix = '0o';
+                } else if (value.match(this.INTEGER_HEXADECIMAL_CONSTANT_REGEX)) {
+                    parsingPrefix = '0x';
+                    value = value.slice(2);
+                } else if (value.match(this.INTEGER_BINARY_CONSTANT_REGEX)) {
+                    parsingPrefix = '0b';
+                    value = value.slice(2);
+                } else {
+                    // try parse as floating
+                    value = raw;
+                    let suffix: FloatingConstantSuffix | undefined;
+                    if (match = value.match(this.FLOATING_CONSTANT_SUFFIX_REGEX)) {
+                        suffix = match[0].toLowerCase() as FloatingConstantSuffix;
+                        value = value.slice(0, -match[0].length);
+                    }
+                    let number: number;
+                    if (value.match(this.DECIMAL_FLOATING_CONSTANT_REGEX)) {
+                        number = Number(value.replaceAll('`', ''));
+                    } else if (value.match(this.HEXADECIMAL_FLOATING_CONSTANT_REGEX)) {
+                        this.error(pos, `Hexadecimal floating point constants are not supported yet`);
+                    } else {
+                        this.error(pos, `Preprocessing number does not correspond to real number`);
+                    }
+                    out.push({pos, type: 'floating-constant', value: number, suffix, raw});
+                }
+                if (parsingPrefix !== undefined) {
+                    let number = BigInt(parsingPrefix + value.replaceAll(`'`, ''));
+                    out.push({pos, type: 'integer-constant', value: number, suffix, raw});
+                }
+            } else if (token.type === 'char-constant') {
+                out.push({pos, type: 'character-constant', value: token.value, prefix: token.prefix, raw: token.raw});
+            } else if (token.type === 'string-literal') {
+                out.push({pos, type: 'string-literal', value: token.value, prefix: token.prefix, raw: token.raw});
+            } else if (token.type === 'symbol') {
+                let value = token.value;
+                if (value in this.SYMBOL_ALIASES) {
+                    value = this.SYMBOL_ALIASES[value];
+                }
+                out.push({pos, type: 'symbol', value, raw: token.value});
+            } else if (token.type === 'universal-char') {
+                // i don't see where the standard says what to do here
+                throw new Error(`This error should not occur, please report it (universal character token present after preprocesing)`);
+            } else if (token.type === 'other') {
+                throw new Error(`This error should not occur, please report it (other token present after preprocesing)`);
+            } else if (token.type === 'placemarker') {
+                throw new Error(`This error should not occur, please report it (placemarker token present after preprocesing)`);
+            } else {
+                throw new Error(`This error should not occur, please report it (invalid preprocessing token)`);
+            }
+        }
+        return out;
+    }
+
+    create<T extends a.Node['type']>(pos: Position, type: T, value: Omit<Extract<a.Node, {type: T}>, 'pos' | 'type'>): Extract<a.Node, {type: T}> {
+        return Object.assign(value, {pos, type}) as Extract<a.Node, {type: T}>;
+    }
+
+    createExpr<T extends a.Expression['type']>(pos: Position, type: T, exprType: Type, value: Omit<Extract<a.Expression, {type: T}>, 'pos' | 'type' | 'exprType'>): Extract<a.Expression, {type: T}> {
+        return Object.assign(value, {pos, type, exprType}) as Extract<a.Expression, {type: T}>;
+    }
+
+    identifierExpression(): a.IdentifierExpression {
+        let token = this.eat('identifier');
+        let data = this.scope.getVariable(token.value);
+        if (!data) {
+            this.error(token, `Variable '${token.value}' is not defined`);
+        }
+        return this.createExpr(token.pos, 'identifier-expression', data.type, {name: token.value});
+    }
+
+    integerConstant(): a.IntegerConstant {
+        let token = this.eat('integer-constant');
+        let type: Type;
+        if (token.suffix === undefined) {
+            type = t.INT;
+        } else if (token.suffix === 'l') {
+            type = t.LONG_INT;
+        } else if (token.suffix === 'll') {
+            type = t.LONG_LONG_INT;
+        } else if (token.suffix === 'wb') {
+            type = t._BitInt(token.value.toString(2).length + 1);
+        } else if (token.suffix === 'u') {
+            type = t.UNSIGNED_INT;
+        } else if (token.suffix === 'ul') {
+            type = t.UNSIGNED_LONG_INT;
+        } else if (token.suffix === 'ull') {
+            type = t.UNSIGNED_LONG_LONG_INT;
+        } else if (token.suffix === 'uwb') {
+            type = t.unsigned_BitInt(token.value.toString(2).length + 1);
+        } else {
+            throw new Error(`This error should not occur, please report it (invalid integer constant suffix)`);
+        }
+        return this.createExpr(token.pos, 'integer-constant', type, {value: token.value});
+    }
+
+    floatingConstant(): a.FloatingConstant {
+        let token = this.eat('floating-constant');
+        let type: Type;
+        if (token.suffix === undefined) {
+            type = t.DOUBLE;
+        } else if (token.suffix === 'f') {
+            type = t.FLOAT;
+        } else if (token.suffix === 'l') {
+            type = t.LONG_DOUBLE;
+        } else if (token.suffix === 'df') {
+            this.error(token, `Decimal floating-point types are not supported`);
+        } else if (token.suffix === 'dd') {
+            this.error(token, `Decimal floating-point types are not supported`);
+        } else if (token.suffix === 'dl') {
+            this.error(token, `Decimal floating-point types are not supported`);
+        } else {
+            throw new Error(`This error should not occur, please report it (invalid integer constant suffix)`);
+        }
+        return this.createExpr(token.pos, 'floating-constant', type, {value: token.value});
+    }
+
+    stringLiteral(): a.StringLiteral {
+        let token = this.eat('string-literal');
+        let type: Type;
+        if (token.prefix === undefined) {
+            type = t.INT;
+        } else if (token.prefix === 'u8') {
+            type = t.BUILTIN_UINT8;
+        } else if (token.prefix === 'u') {
+            type = t.UNSIGNED_INT;
+        } else if (token.prefix === 'U') {
+            type = t.UNSIGNED_LONG_INT;
+        } else if (token.prefix === 'L') {
+            type = t.UNSIGNED_LONG_INT;
+        } else {
+            throw new Error(`This error should not occur, please report it (invalid integer constant suffix)`);
+        }
+        let value = structuredClone(token.value);
+        value.push(0);
+        type = t.array(type, value.length);
+        return this.createExpr(token.pos, 'string-literal', type, {value});
+    }
+
+    characterConstant(): a.CharacterConstant {
+        let token = this.advance<'character-constant'>();
+        let type: Type;
+        if (token.prefix === undefined) {
+            type = t.INT;
+        } else if (token.prefix === 'u8') {
+            type = t.BUILTIN_UINT8;
+        } else if (token.prefix === 'u') {
+            type = t.UNSIGNED_INT;
+        } else if (token.prefix === 'U') {
+            type = t.UNSIGNED_LONG_INT;
+        } else if (token.prefix === 'L') {
+            type = t.UNSIGNED_LONG_INT;
+        } else {
+            throw new Error(`This error should not occur, please report it (invalid integer constant suffix)`);
+        }
+        return this.createExpr(token.pos, 'character-constant', type, {value: token.value});
+    }
+
+    primaryExpression(): a.PrimaryExpression {
+        if (this.match('identifier')) {
+            return this.identifierExpression();
+        } else if (this.match('integer-constant')) {
+            return this.integerConstant();
+        } else if (this.match('floating-constant')) {
+            return this.floatingConstant();
+        } else if (this.match('character-constant')) {
+            return this.characterConstant();
+        } else if (this.match('false')) {
+            let pos = this.advance().pos;
+            return this.createExpr(pos, 'boolean-constant', t.BOOL, {value: false});
+        } else if (this.match('true')) {
+            let pos = this.advance().pos;
+            return this.createExpr(pos, 'boolean-constant', t.BOOL, {value: true});
+        } else if (this.match('nullptr')) {
+            let pos = this.advance().pos;
+            return this.createExpr(pos, 'nullptr-constant', t.NULLPTR, {});
+        } else if (this.match('string-literal')) {
+            return this.stringLiteral();
+        } else if (this.match('(')) {
+            let pos = this.advance().pos;
+            let out = this.expression();
+            this.eat(')');
+            return this.createExpr(pos, 'parenthesized-expression', out.exprType, {value: out});
+        } else if (this.match('_Generic')) {
+            this.error(`_Generic is not supported yet`);
+        } else {
+            this.error(`Expected primary expression`);
+        }
+    }
+
+    isModifiableLvalue(value: a.Expression): boolean {
+        if (!t.isObject(value.exprType) || value.exprType.const) {
+            return false;
+        }
+        return Boolean(false
+            || value.type === 'identifier-expression'
+            || value.type === 'member-expression'
+            || value.type === 'index-expression'
+            || (value.type === 'basic-unary-expression' && value.op === '*')
+        );
+    }
+
+    indexExpression(value: a.PostfixExpression): a.IndexExpression {
+        let pos = this.eat('[').pos;
+        let index = this.expression();
+        this.eat(']');
+        let type: t.Pointer | t.Array | t.IncompleteArray;
+        if (value.exprType.type === 'pointer' || value.exprType.type === 'array' || value.exprType.type === 'incomplete array') {
+            if (!t.isInteger(index.exprType)) {
+                this.error(pos, `Cannot add pointer and non-integer types`);
+            }
+            type = value.exprType;
+        } else if (index.exprType.type === 'pointer' || index.exprType.type === 'array' || index.exprType.type === 'incomplete array') {
+                if (!t.isInteger(value.exprType)) {
+                this.error(pos, `Cannot add pointer and non-integer types`);
+            }
+            type = index.exprType;
+        } else {
+            this.error(pos, `One of the arguments to the indexing operator must be a pointer or array`);
+        }
+        let derefType = type.type === 'pointer' ? type.value : type.items;
+        return this.createExpr(pos, 'index-expression', derefType, {value, index});
+    }
+
+    functionCallExpression(func: a.PostfixExpression): a.FunctionCallExpression {
+        let pos = this.eat('(').pos;
+        if (func.exprType.type !== 'function') {
+            this.error(pos, `Function being called is not a function`);
+        }
+        let args: a.FullAssignmentExpression[] = [];
+        while (!this.match(')')) {
+            args.push(this.fullAssignmentExpression());
+            if (this.match(',')) {
+                this.advance();
+            } else {
+                break;
+            }
+        }
+        this.eat(')');
+        return this.createExpr(pos, 'function-call-expression', func.exprType.returnType, {func, args});
+    }
+
+    memberExpression(value: a.PostfixExpression): a.MemberExpression {
+        let op = this.match('.') ? this.eat('.') : this.eat('->');
+        let memberName = this.identifierExpression();
+        let type = value.exprType;
+        if (op.value === '->') {
+            if (type.type !== 'pointer') {
+                this.error(op, `Argument of -> operator must be a pointer to a struct or union`);
+            }
+            type = type.value;
+        }
+        if (!this.isModifiableLvalue(value) || !(type.type === 'struct' || type.type === 'union')) {
+            if (op.value === '.') {
+                this.error(op, `Argument of . operator must be a struct or union, is of type ${t.toString(type)}`);
+            } else {
+                this.error(op, `Argument of -> operator must be a pointer to a struct or union, is of type ${t.toString(value.exprType)}`);
+            }
+        }
+        if (type.const) {
+            this.error(op, `Argument of ${op.value} operator must be modifiable`);
+        }
+        let found = false;
+        for (let member of type.members) {
+            if (member.name === memberName.name) {
+                type = member.type;
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            this.error(memberName, `Member '${memberName.name}' does not exist in type ${t.toString(value.exprType)}`);
+        }
+        if (type.const) {
+            this.error(op, `Argument of ${op.value} operator must be modifiable`);
+        }
+        return this.createExpr(op.pos, 'member-expression', type, {op: op.value, value, member: memberName});
+    }
+
+    arithmeticPostfixExpression(value: a.PostfixExpression): a.ArithmeticPostfixExpression {
+        let op = this.match('++') ? this.eat('++') : this.eat('--');
+        if (!this.isModifiableLvalue(value)) {
+            this.error(op, `Argument to ${op.value} operator must be a modifiable lvalue`);
+        }
+        return this.createExpr(op.pos, 'arithmetic-postfix-expression', value.exprType, {op: op.value, value});
+    }
+
+    bracedInitializer(type: Type): unknown {
+
+    }
+
+    compoundLiteral(): a.CompoundLiteral {
+        this.eat('(');
+        let type = this.typeName();
+        this.eat(')');
+        this.bracedInitializer(type.typeType);
+    }
+
+    postfixExpression(): a.PostfixExpression {
+        let value: a.PostfixExpression;
+        let primary = this.try(this.primaryExpression);
+        if (primary) {
+            value = primary;
+        } else {
+            let compound = this.try(this.compoundLiteral);
+            if (compound) {
+                value = compound;
+            } else {
+                this.error(`Expected postfix expression`);
+            }
+        }
+        while (true) {
+            if (this.match('[')) {
+                value = this.indexExpression(value);
+            } else if (this.match('(')) {
+                value = this.functionCallExpression(value);
+            } else if (this.match(['.', '->'])) {
+                value = this.memberExpression(value);
+            } else if (this.match(['++', '--'])) {
+                value = this.arithmeticPostfixExpression(value);
+            } else {
+                break;
+            }
+        }
+        return value;
+    }
+
+    arithmeticUnaryExpression(): a.ArithmeticUnaryExpression {
+        let op = this.match('++') ? this.eat('++') : this.eat('--');
+        let value = this.unaryExpression();
+        if (!this.isModifiableLvalue(value)) {
+            this.error(op, `Argument to ${op.value} operator must be a modifiable lvalue`);
+        }
+        return this.createExpr(op.pos, 'arithmetic-unary-expression', value.exprType, {op: op.value, value});
+    }
+
+    basicUnaryExpression(): a.BasicUnaryExpression {
+        let op = this.eat(['&', '*', '+', '-', '~', '!']) as SymbolToken;
+        let value = this.fullCastExpression();
+    }
+
+    unaryExpression(): a.UnaryExpression {
+        if (this.match(['++', '--'])) {
+            return this.arithmeticUnaryExpression();
+        } else if (this.match(['&', '*', '+', '-', '~', '!'])) {
+            return this.basicUnaryExpression();
+        } else {
+            return this.postfixExpression();
+        }
+    }
+
+    castExpression(): a.CastExpression {
+        this.eat('(');
+    }
+
+    fullCastExpression(): a.FullCastExpression {
+        try {
+            return this.castExpression();
+        } catch (error) {
+            if (!(error instanceof CError)) {
+                throw error;
+            }
+            return this.unaryExpression();
+        }
+    }
+
+    fullAssignmentExpression(): a.FullAssignmentExpression {
+
+    }
+    
+    expression(): a.Expression {
+
+    }
+
+    typeName(): a.TypeName {
+
+    }
 
 }
