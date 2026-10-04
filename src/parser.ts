@@ -521,7 +521,7 @@ export class Parser extends BaseParser<Token, Matcher> {
         
     }
 
-    compoundLiteral(): a.CompoundLiteral {
+    compoundLiteral(): a.Expression {
         this.eat('(');
         let type = this.typeName();
         this.eat(')');
@@ -616,15 +616,28 @@ export class Parser extends BaseParser<Token, Matcher> {
     }
 
     sizeofValueExpression(): a.SizeofValueExpression {
-        this.eat('sizeof');
+        let token = this.eat('sizeof');
+        let value = this.unaryExpression();
+        // size_t is unsigned int
+        return this.createExpr(token.pos, 'sizeof-value-expression', t.UNSIGNED_INT, {value});
     }
 
     sizeofTypeExpression(): a.SizeofTypeExpression {
-        this.eat('sizeof');
+        let token = this.eat('sizeof');
+        this.eat('(');
+        let type = this.typeName();
+        this.eat(')');
+        // size_t is unsigned int
+        return this.createExpr(token.pos, 'sizeof-type-expression', t.UNSIGNED_INT, {value: type});
     }
 
     alignofExpression(): a.AlignofExpression {
-
+        let token = this.eat('sizeof');
+        this.eat('(');
+        let type = this.typeName();
+        this.eat(')');
+        // size_t is unsigned int
+        return this.createExpr(token.pos, 'alignof-expression', t.UNSIGNED_INT, {value: type});
     }
 
     unaryExpression(): a.Expression {
@@ -646,17 +659,37 @@ export class Parser extends BaseParser<Token, Matcher> {
     }
 
     castExpression(): a.Expression {
-        try {
-            this.eat('(');
-            let type = this.typeName();
-            this.eat(')');
-        } catch (error) {
-            if (!(error instanceof CError)) {
-                throw error;
+        if (this.match('(')) {
+            let paren = this.advance();
+            try {
+                let type = this.typeName();
+                this.eat(')');
+                let value = this.castExpression();
+                if (!t.isCastAllowed(value.exprType, type.typeType)) {
+                    this.error(paren, `Cannot cast value of type '${t.toString(value.exprType)}' to type '${t.toString(type.typeType)}`);
+                }
+                return this.createExpr(paren.pos, 'cast-expression', type.typeType, {castTo: type, value});
+            } catch (error) {
+                if (!(error instanceof CError)) {
+                    throw error;
+                }
+                return this.unaryExpression();
             }
+        } else {
             return this.unaryExpression();
         }
+    }
 
+    multiplicativeExpression(): a.Expression {
+        let value = this.castExpression();
+        while (true) {
+            if (!(this.match('*') || this.match('/') || this.match('%'))) {
+                break;
+            }
+            let op = this.advance<'*' | '/' | '%'>();
+            let arg = this.castExpression();
+        }
+        return value;
     }
 
     assignmentExpression(): a.Expression {
