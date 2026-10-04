@@ -61,11 +61,8 @@ export abstract class BaseDoer {
 
     abstract getCurrentPosition(): Position;
 
-    error(msg: string): never;
-    error(pos: Position | {pos: Position}, msg: string): never;
-    error(pos: Position | {pos: Position} | string, msg?: string): never {
-        if (typeof pos === 'string') {
-            msg = pos;
+    error(pos: Position | {pos: Position} | undefined, msg: string): never {
+        if (pos === undefined) {
             pos = this.getCurrentPosition();
         } else if ('pos' in pos) {
             pos = pos.pos;
@@ -191,29 +188,28 @@ export abstract class BaseParser<Token extends BaseToken, Matcher extends EOF | 
 
 export namespace t {
 
-    // there are never any padding bits except for in bool
-
     export type BaseObject = {const?: boolean, volatile?: boolean, align?: number};
 
-    export const BOOL = {type: 'bool', size: 1} as const;
+    export const BOOL = {type: 'bool', size: 1, bits: 1} as const;
     export type Bool = BaseObject & typeof BOOL;
 
-    export const CHAR = {type: 'char', size: 1} as const;
+    // char is signed
+    export const CHAR = {type: 'char', size: 1, bits: 16} as const;
     export type Char = BaseObject & typeof CHAR;
 
-    export const SIGNED_CHAR = {type: 'signed char', size: 1} as const;
+    export const SIGNED_CHAR = {type: 'signed char', size: 1, bits: 16} as const;
     export type SignedChar = BaseObject & typeof SIGNED_CHAR;
 
-    export const SHORT_INT = {type: 'short int', size: 1} as const;
+    export const SHORT_INT = {type: 'short int', size: 1, bits: 16} as const;
     export type ShortInt = BaseObject & typeof SHORT_INT;
 
-    export const INT = {type: 'int', size: 1} as const;
+    export const INT = {type: 'int', size: 1, bits: 16} as const;
     export type Int = BaseObject & typeof INT;
 
-    export const LONG_INT = {type: 'long int', size: 2} as const;
+    export const LONG_INT = {type: 'long int', size: 2, bits: 32} as const;
     export type LongInt = BaseObject & typeof LONG_INT;
 
-    export const LONG_LONG_INT = {type: 'long long int', size: 4} as const;
+    export const LONG_LONG_INT = {type: 'long long int', size: 4, bits: 64} as const;
     export type LongLongInt = BaseObject & typeof LONG_LONG_INT;
 
     export type BitInt = BaseObject & {type: '_BitInt', size: number, bits: number};
@@ -221,7 +217,7 @@ export namespace t {
         return {type: '_BitInt', size: Math.ceil(bits / 16), bits};
     }
 
-    export const BUILTIN_INT8 = {type: '__builtin_int8', size: 1} as const;
+    export const BUILTIN_INT8 = {type: '__builtin_int8', size: 1, bits: 8} as const;
     export type BuiltinInt8 = BaseObject & typeof BUILTIN_INT8;
 
     export type SignedInteger = SignedChar | ShortInt | Int | LongInt | LongLongInt | BitInt | BuiltinInt8;
@@ -229,19 +225,19 @@ export namespace t {
         return type.type === 'signed char' || type.type === 'short int' || type.type === 'int' || type.type === 'long int' || type.type === 'long long int' || type.type === '_BitInt' || type.type === '__builtin_int8';
     }
 
-    export const UNSIGNED_CHAR = {type: 'unsigned char', size: 1} as const;
+    export const UNSIGNED_CHAR = {type: 'unsigned char', size: 1, bits: 16} as const;
     export type UnsignedChar = BaseObject & typeof UNSIGNED_CHAR;
 
-    export const UNSIGNED_SHORT_INT = {type: 'unsigned short int', size: 1} as const;
+    export const UNSIGNED_SHORT_INT = {type: 'unsigned short int', size: 1, bits: 16} as const;
     export type UnsignedShortInt = BaseObject & typeof UNSIGNED_SHORT_INT;
 
-    export const UNSIGNED_INT = {type: 'unsigned int', size: 1} as const;
+    export const UNSIGNED_INT = {type: 'unsigned int', size: 1, bits: 16} as const;
     export type UnsignedInt = BaseObject & typeof UNSIGNED_INT;
 
-    export const UNSIGNED_LONG_INT = {type: 'unsigned long int', size: 2} as const;
+    export const UNSIGNED_LONG_INT = {type: 'unsigned long int', size: 2, bits: 32} as const;
     export type UnsignedLongInt = BaseObject & typeof UNSIGNED_LONG_INT;
 
-    export const UNSIGNED_LONG_LONG_INT = {type: 'unsigned long long int', size: 4} as const;
+    export const UNSIGNED_LONG_LONG_INT = {type: 'unsigned long long int', size: 4, bits: 64} as const;
     export type UnsignedLongLongInt = BaseObject & typeof UNSIGNED_LONG_LONG_INT;
 
     export type UnsignedBitInt = BaseObject & {type: 'unsigned _BitInt', size: number, bits: number};
@@ -249,7 +245,7 @@ export namespace t {
         return {type: 'unsigned _BitInt', size: Math.ceil(bits / 16), bits};
     }
 
-    export const BUILTIN_UINT8 = {type: '__builtin_uint8', size: 1} as const;
+    export const BUILTIN_UINT8 = {type: '__builtin_uint8', size: 1, bits: 8} as const;
     export type BuiltinUint8 = BaseObject & typeof BUILTIN_UINT8;
 
     export type UnsignedInteger = Bool | UnsignedChar | UnsignedShortInt | UnsignedInt | UnsignedLongInt | UnsignedLongLongInt | UnsignedBitInt | BuiltinUint8;
@@ -285,14 +281,14 @@ export namespace t {
     }
 
     export type EnumeratedMember = {name: string, value: bigint};
-    export type Enumerated = BaseObject & {type: 'enum', size: number, tag?: string, backing: CompleteType, members: EnumeratedMember[]};
-    export function createEnumerated(backing: CompleteType, members: EnumeratedMember[]): Enumerated {
-        return {type: 'enum', size: backing.size, backing, members};
+    export type Enumerated = BaseObject & {type: 'enum', size: number, tag?: string, underlying: Char | SignedInteger | UnsignedInteger, members: EnumeratedMember[]};
+    export function createEnumerated(underlying: Char | SignedInteger | UnsignedInteger, members: EnumeratedMember[]): Enumerated {
+        return {type: 'enum', size: underlying.size, underlying, members};
     }
 
-    export type Integer = Char | SignedInteger | UnsignedInteger;
+    export type Integer = Char | SignedInteger | UnsignedInteger | Enumerated;
     export function isInteger(type: Type): type is Integer {
-        return type.type === 'char' || isSignedInteger(type) || isUnsignedInteger(type);
+        return type.type === 'char' || isSignedInteger(type) || isUnsignedInteger(type) || type.type === 'enum';
     }
 
     export type Real = Integer | Floating;
@@ -308,24 +304,77 @@ export namespace t {
     export const VOID = {type: 'void'} as const;
     export type Void = BaseObject & typeof VOID;
 
-    export type Array = BaseObject & {type: 'array', size: number, items: CompleteType, length: number};
-    export function array(items: CompleteType, length: number): Array {
-        return {type: 'array', size: items.size * length, items, length};
+    export type SizedArray = BaseObject & {type: 'array', size: number, items: CompleteType, length: number};
+    export type VariableLengthArray = BaseObject & {type: 'array', size: undefined, items: CompleteType, length: '*' | a.Expression};
+    export type IncompleteArray = BaseObject & {type: 'array', size: undefined, items: CompleteType, length: undefined};
+    export type Array = SizedArray | VariableLengthArray | IncompleteArray;
+    export function array(items: CompleteType, length: number | undefined | '*' | a.Expression): Array {
+        let size: number | undefined = undefined;
+        if (typeof items.size === 'number' && typeof length === 'number') {
+            size = items.size * length;
+        }
+        return {type: 'array', size, items, length} as Array;
     }
 
-    export type StructMember = {name: string | undefined, type: CompleteType, offset: number, bitField?: number};
-    export type Struct = BaseObject & {type: 'struct', size: number, tag?: string, members: StructMember[]};
+    export type MemberType = Exclude<CompleteType, VariableLengthArray | IncompleteArray>;
+    export function isMemberType(type: Type): type is MemberType {
+        return isComplete(type) && !(type.type === 'array' && type.size === undefined);
+    }
 
-    export type UnionMember = {name: string | undefined, type: CompleteType, bitField?: number};
+    // bit field offsets are represented by fractions
+    export type StructMember = {name: string, type: MemberType, offset: number, bitField?: number} | {name: undefined, type: Struct | Union, offset: number, bitField?: number};
+    export type ParamStructMember = {name: string, type: MemberType, bitField?: number} | {name: undefined, type: Struct | Union, bitField?: number};
+    export type Struct = BaseObject & {type: 'struct', size: number, tag?: string, members: StructMember[], flexible?: IncompleteArray};
+    export function struct(members: ParamStructMember[], flexible?: IncompleteArray, tag?: string): Struct {
+        let size = 0;
+        let outMembers: StructMember[] = [];
+        for (let i = 0; i < members.length; i++) {
+            let member = Object.assign(structuredClone(members[i]), {offset: 0}) as StructMember;
+            if (member.bitField !== undefined) {
+                // extract all bit field members
+                // and prepare the next iteration of the outer loop to be on
+                // the next non-bitfield member/member that doesn't fit in 16 bits
+                let bits = 0;
+                i--;
+                while (true) {
+                    i++;
+                    let member = Object.assign(structuredClone(members[i]), {offset: 0}) as StructMember;
+                    let field = member.bitField;
+                    if (field === undefined || (bits + field) > 16) {
+                        i--;
+                        break;
+                    }
+                    bits += field;
+                    member.offset = size;
+                    size += field / 16;
+                    outMembers.push(member);
+                }
+                size = Math.ceil(size);
+            } else {
+                member.offset = size;
+                size += member.type.size;
+                outMembers.push(member);
+            }
+        }
+        return {
+            type: 'struct',
+            size,
+            tag,
+            members: outMembers,
+            flexible,
+        };
+    }
+
+    export type UnionMember = {name: string, type: MemberType, bitField?: number} | {name: undefined, type: Struct | Union, bitField?: number};
     export type Union = BaseObject & {type: 'union', size: number, tag?: string, members: UnionMember[]};
-    export function union(members: UnionMember[]): Union {
+    export function union(members: UnionMember[], tag?: string): Union {
         let size = 0;
         for (let member of members) {
             if (member.type.size > size) {
                 size = member.type.size;
             }
         }
-        return {type: 'union', size, members};
+        return {type: 'union', size, tag, members};
     }
 
     export type Parameter = {name?: string, type: Type};
@@ -347,23 +396,21 @@ export namespace t {
         return isArithmetic(type) || type.type === 'pointer' || type.type === 'nullptr_t';
     }
 
-    export type IncompleteArray = BaseObject & {type: 'incomplete array', items: Type};
-
     export type IncompleteStruct = BaseObject & {type: 'incomplete struct', tag: string};
 
     export type IncompleteUnion = BaseObject & {type: 'incomplete union', tag: string};
 
-    export type IncompleteType = IncompleteArray | IncompleteStruct | IncompleteUnion;
+    export type IncompleteType = Void | IncompleteArray | IncompleteStruct | IncompleteUnion;
     export function isIncomplete(type: Type): type is IncompleteType {
-        return type.type.startsWith('incomplete ');
+        return type.type === 'void' || (type.type === 'array' && type.length === undefined) || type.type === 'incomplete struct' || type.type === 'incomplete union';
     }
 
-    export type DerivedDeclarator = Array | Function | Pointer | IncompleteArray;
+    export type DerivedDeclarator = Array | Function | Pointer;
     export function isDerivedDeclarator(type: Type): type is DerivedDeclarator {
-        return type.type === 'array' || type.type === 'function' || type.type === 'pointer' || type.type === 'incomplete array';
+        return type.type === 'array' || type.type === 'function' || type.type === 'pointer';
     }
 
-    export type CompleteType = Scalar | Array | Struct | Union;
+    export type CompleteType = Scalar | SizedArray | VariableLengthArray | Struct | Union;
     export function isComplete(type: Type): type is CompleteType {
         return !type.type.startsWith('incomplete ') && type.type !== 'function';
     }
@@ -375,16 +422,101 @@ export namespace t {
 
     export type Type = Object | Function;
 
-    export function const_(type: Object): Object {
+    export function const_<T extends Object>(type: T): T {
         type = structuredClone(type);
         type.const = true;
         return type;
     }
 
-    export function volatile(type: Object): Object {
+    export function volatile<T extends Object>(type: T): T {
         type = structuredClone(type);
         type.volatile = true;
         return type;
+    }
+
+    export function copyQualifiers<T extends Object>(from: Object, to: T): T {
+        to = structuredClone(to);
+        if (from.const) {
+            to.const = from.const;
+        }
+        if (from.volatile) {
+            to.volatile = from.volatile;
+        }
+        if (from.align) {
+            to.align = from.align;
+        }
+        if (from.type === 'pointer' && to.type === 'pointer' && from.restrict) {
+            to.restrict = from.restrict;
+        }
+        return to;
+    }
+
+    // this is like `isSignedInteger` but works on enums and includes `char`
+    export function isSigned(type: Integer): type is SignedInteger | Char | (Enumerated & {underlying: SignedInteger | Char}) {
+        if (type.type === 'enum') {
+            type = type.underlying;
+        }
+        return isSignedInteger(type) || type.type === 'char';
+    }
+
+    // same as `isUnsignedInteger` but works on enums
+    export function isUnsigned(type: Integer): type is UnsignedInteger | (Enumerated & {underlying: SignedInteger | UnsignedInteger}) {
+        if (type.type === 'enum') {
+            type = type.underlying;
+        }
+        return isUnsignedInteger(type);
+    }
+
+    export function toSigned(type: Integer): SignedInteger {
+        if (type.type === 'enum') {
+            type = type.underlying;
+        }
+        let out: SignedInteger;
+        if (type.type === 'bool') {
+            throw new Error(`This error should not occur, please report it (attempt to convert bool to signed)`);
+        } else if (type.type === '__builtin_uint8') {
+            out = BUILTIN_INT8;
+        } else if (type.type === 'char' || type.type === 'unsigned char') {
+            out = SIGNED_CHAR;
+        } else if (type.type === 'unsigned short int') {
+            out = SHORT_INT;
+        } else if (type.type === 'unsigned int') {
+            out = INT;
+        } else if (type.type === 'unsigned long int') {
+            out = LONG_INT;
+        } else if (type.type === 'unsigned long long int') {
+            out = SIGNED_CHAR;
+        } else if (type.type === 'unsigned _BitInt') {
+            out = _BitInt(type.bits);
+        } else {
+            out = type;
+        }
+        return copyQualifiers(type, out);
+    }
+
+    export function toUnsigned(type: Integer): UnsignedInteger {
+        if (type.type === 'enum') {
+            type = type.underlying;
+        }
+        let out: UnsignedInteger;
+        if (type.type === '__builtin_int8') {
+            out = BUILTIN_UINT8;
+        } else if (type.type === 'char' || type.type === 'signed char') {
+            out = UNSIGNED_CHAR;
+        } else if (type.type === 'short int') {
+            out = UNSIGNED_SHORT_INT;
+        } else if (type.type === 'int') {
+            out = UNSIGNED_INT;
+        } else if (type.type === 'long int') {
+            out = UNSIGNED_LONG_INT;
+        } else if (type.type === 'long long int') {
+            out = UNSIGNED_CHAR;
+        } else if (type.type === '_BitInt') {
+            out = unsigned_BitInt(type.bits);
+        } else {
+            out = type;
+        }
+        return copyQualifiers(type, out);
     }
 
     export function toString(type: Type, full?: boolean, identifier?: string): string {
@@ -393,7 +525,7 @@ export namespace t {
             stack.unshift(type);
             if (type.type === 'pointer') {
                 type = type.value;
-            } else if (type.type === 'array' || type.type === 'incomplete array') {
+            } else if (type.type === 'array') {
                 type = type.items;
             } else {
                 type = type.returnType;
@@ -406,6 +538,8 @@ export namespace t {
             } else {
                 specifier = type.type;
             }
+        } else if (type.type === 'void') {
+            return `void`;
         } else if (type.type === 'struct' || type.type === 'union') {
             if (type.tag && !full) {
                 specifier = `${type.type} ${type.tag}`;
@@ -450,9 +584,13 @@ export namespace t {
                     declarator = `(${declarator})`;
                 }
             } else if (type.type === 'array') {
-                declarator += `[${type.length}]`;
-            } else if (type.type === 'incomplete array') {
-                declarator += '[]';
+                if (typeof type.length === 'number') {
+                    declarator += `${type.length}`;
+                } else if (type.length === undefined) {
+                    declarator += `[]`;
+                } else {
+                    declarator += `[*]`;
+                }
             } else if (type.type === 'function') {
                 declarator += `(`;
                 for (let i = 0; i < type.params.length; i++) {
@@ -471,6 +609,344 @@ export namespace t {
             }
         }
         return `${specifier} ${declarator}`;
+    }
+
+    export function isSame(x: Type, y: Type): boolean {
+        if (x.type === 'function' || y.type === 'function') {
+            if (!(x.type === 'function' && y.type === 'function')) {
+                return false;
+            }
+            return isSame(x.returnType, y.returnType)
+                && x.params.length === y.params.length
+                && x.params.map((p, i) => isSame(p.type, (y as Function).params[i].type))
+                && x.variadic === y.variadic
+            ;
+        }
+        if (x.const !== y.const || x.volatile !== y.volatile || x.align !== y.align) {
+            return false;
+        }
+        if (x.type === 'enum' || y.type === 'enum') {
+            if (x.type === 'enum' && y.type === 'enum') {
+                if (!isSame(x.underlying, y.underlying)) {
+                    return false;
+                }
+                if (x.members.length !== y.members.length) {
+                    return false;
+                }
+                for (let member of x.members) {
+                    if (!y.members.some(m => m.name === member.name && m.value === member.value)) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+            if (x.type === 'enum') {
+                x = x.underlying;
+            }
+            if (y.type === 'enum') {
+                y = y.underlying;
+            }
+        }
+        if (x.type !== y.type) {
+            return false;
+        } else if ((x.type === '_BitInt' || x.type === 'unsigned _BitInt') && (y.type === '_BitInt' || y.type === 'unsigned _BitInt')) {
+            return x.bits === y.bits;
+        } else if (isBasic(x) || x.type === 'nullptr_t' || x.type === 'void' || isBasic(y) || y.type === 'nullptr_t' || y.type === 'void') {
+            return true;
+        } else if (x.type === 'pointer' && y.type === 'pointer') {
+            return isSame(x.value, y.value);
+        } else if (x.type === 'array' && y.type === 'array') {
+            if (!isSame(x.items, y.items)) {
+                return false;
+            }
+            if (typeof x.length === 'object' && typeof y.length === 'object') {
+                // for VLAs we just assume they are
+                return true;
+            } else {
+                return x.length === y.length;
+            }
+        } else if ((x.type === 'struct' && y.type === 'struct') || (x.type === 'union' && y.type === 'union')) {
+            if (x.tag !== y.tag || x.members.length !== y.members.length) {
+                return false;
+            }
+            for (let i = 0; i < x.members.length; i++) {
+                let xm = x.members[i];
+                let ym = y.members[i];
+                if (xm.name !== ym.name || xm.bitField !== ym.bitField) {
+                    return false;
+                }
+                if (!isSame(xm.type, ym.type)) {
+                    return false;
+                }
+            }
+            return true;
+        } else if (x.type === 'incomplete struct' && y.type === 'incomplete struct') {
+            return x.tag === y.tag;
+        } else if (x.type === 'incomplete union' && y.type === 'incomplete union') {
+            return x.tag === y.tag;
+        } else {
+            throw new Error(`This error should not occur, please report it (invalid type)`);
+        }
+    }
+
+    export function isCompatible(x: Type, y: Type): boolean {
+        if (x.type === 'function' || y.type === 'function') {
+            if (!(x.type === 'function' && y.type === 'function')) {
+                return false;
+            }
+            return isCompatible(x.returnType, y.returnType)
+                && x.params.length === y.params.length
+                && x.params.map((p, i) => isCompatible(p.type, (y as Function).params[i].type))
+                && x.variadic === y.variadic
+            ;
+        }
+        if (x.const !== y.const || x.volatile !== y.volatile || x.align !== y.align) {
+            return false;
+        }
+        if (x.type === 'enum' || y.type === 'enum') {
+            if (x.type === 'enum' && y.type === 'enum') {
+                if (!isCompatible(x.underlying, y.underlying)) {
+                    return false;
+                }
+                if (x.members.length !== y.members.length) {
+                    return false;
+                }
+                for (let member of x.members) {
+                    if (!y.members.some(m => m.name === member.name && m.value === member.value)) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+            if (x.type === 'enum') {
+                x = x.underlying;
+            }
+            if (y.type === 'enum') {
+                y = y.underlying;
+            }
+        }
+        if (x.type !== y.type) {
+            return false;
+        } else if ((x.type === '_BitInt' || x.type === 'unsigned _BitInt') && (y.type === '_BitInt' || y.type === 'unsigned _BitInt')) {
+            return x.bits === y.bits;
+        } else if (isBasic(x) || x.type === 'nullptr_t' || x.type === 'void' || isBasic(y) || y.type === 'nullptr_t' || y.type === 'void') {
+            return true;
+        } else if (x.type === 'pointer' && y.type === 'pointer') {
+            if (x.restrict !== y.restrict) {
+                return false;
+            }
+            return isCompatible(x.value, y.value);
+        } else if (x.type === 'array' && y.type === 'array') {
+            if (!isCompatible(x.items, y.items)) {
+                return false;
+            }
+            if (typeof x.length === 'object' && typeof y.length === 'object') {
+                // for VLAs we just assume they are
+                return true;
+            } else if (x.length === undefined || y.length === undefined) {
+                // incomplete types are compatible with their completed forms
+                return true;
+            } else {
+                return x.length === y.length;
+            }
+        } else if (x.type === 'struct' && y.type === 'struct') {
+            if (x.members.length !== y.members.length) {
+                return false;
+            }
+            for (let i = 0; i < x.members.length; i++) {
+                let xm = x.members[i];
+                let ym = y.members[i];
+                if (xm.name !== ym.name || xm.bitField !== ym.bitField) {
+                    return false;
+                }
+                if (!isCompatible(xm.type, ym.type)) {
+                    return false;
+                }
+            }
+            if (x.flexible || y.flexible) {
+                if (!(x.flexible && y.flexible)) {
+                    return false;
+                }
+                if (!isCompatible(x.flexible, y.flexible)) {
+                    return false;
+                }
+            }
+            return true;
+        } else if (x.type === 'union' && y.type === 'union') {
+            if (x.members.length !== y.members.length) {
+                return false;
+            }
+            for (let i = 0; i < x.members.length; i++) {
+                let xm = x.members[i];
+                let ym = y.members[i];
+                if (xm.name !== ym.name || xm.bitField !== ym.bitField) {
+                    return false;
+                }
+                if (!isCompatible(xm.type, ym.type)) {
+                    return false;
+                }
+            }
+            return true;
+        } else if (x.type === 'incomplete struct' && y.type === 'incomplete struct') {
+            return x.tag === y.tag;
+        } else if (x.type === 'incomplete union' && y.type === 'incomplete union') {
+            return x.tag === y.tag;
+        } else {
+            throw new Error(`This error should not occur, please report it (invalid type)`);
+        }
+    }
+
+    export function createComposite(x: Type, y: Type): false | Type {
+        if (!isCompatible(x, y)) {
+            return false;
+        }
+        if (isBasic(x) || x.type === 'enum' || x.type === 'nullptr_t' || isBasic(y) || y.type === 'enum' || y.type === 'nullptr_t') {
+            return x;
+        } else if (x.type === 'pointer' && y.type === 'pointer') {
+            let type = createComposite(x.value, y.value);
+            if (!type) {
+                throw new Error(`This error should not occur, please report it (typesAreCompatible is broken)`);
+            }
+            return copyQualifiers(x, pointer(type));
+        } else if (x.type === 'array' && y.type === 'array') {
+            let length: number | undefined | '*' | a.Expression;
+            if (x.length === undefined) {
+                length = y.length;
+            } else if (y.length === undefined) {
+                length = x.length;
+            } else {
+                // they're compatible, so this works
+                // for VLAs this does just use x instead, but it's undefined behavior anyway
+                length = x.length;
+            }
+            let type = createComposite(x.items, y.items);
+            if (!type || !isComplete(type)) {
+                throw new Error(`This error should not occur, please report it (typesAreCompatible is broken)`);
+            }
+            return copyQualifiers(x, array(type, length));
+        } else if (x.type === 'struct' && y.type === 'struct') {
+            let members: ParamStructMember[] = [];
+            for (let i = 0; i < x.members.length; i++) {
+                let member = x.members[i];
+                let type = createComposite(member.type, y.members[i].type);
+                if (!type || !isMemberType(type)) {
+                    throw new Error(`This error should not occur, please report it (typesAreCompatible is broken)`);
+                }
+                members.push({name: member.name, type, bitField: member.bitField} as ParamStructMember);
+            }
+            let flexible: Struct['flexible'] = undefined;
+            if (x.flexible && y.flexible) {
+                let value = createComposite(x.flexible, y.flexible);
+                if (!flexible) {
+                    throw new Error(`This error should not occur, please report it (typesAreCompatible is broken)`);
+                }
+                flexible = value as Struct['flexible'];
+            }
+            return copyQualifiers(x, struct(members, flexible, x.tag));
+        } else if (x.type === 'union' && y.type === 'union') {
+            let members: UnionMember[] = [];
+            for (let i = 0; i < x.members.length; i++) {
+                let member = x.members[i];
+                let type = createComposite(member.type, y.members[i].type);
+                if (!type || !isMemberType(type)) {
+                    throw new Error(`This error should not occur, please report it (typesAreCompatible is broken)`);
+                }
+                members.push({name: member.name, type, bitField: member.bitField} as UnionMember);
+            }
+            return copyQualifiers(x, union(members, x.tag));
+        } else if (x.type === 'incomplete struct' && y.type === 'incomplete struct') {
+            return x;
+        } else if (x.type === 'incomplete union' && y.type === 'incomplete union') {
+            return x;
+        } else {
+            throw new Error(`This error should not occur, please report it (invalid type)`);
+        }
+    }
+
+    export function getIntegerConversionRank(type: Integer): number {
+        if (type.type === 'enum') {
+            type = type.underlying;
+        }
+        if (type.type === 'bool') {
+            return 0;
+        } else if (type.type === '_BitInt' || type.type === 'unsigned _BitInt') {
+            return type.bits;
+        } else if (type.type === '__builtin_int8' || type.type === '__builtin_uint8') {
+            return 8.1;
+        } else if (type.type === 'char' || type.type === 'signed char' || type.type === 'unsigned char') {
+            return 16.1;
+        } else if (type.type === 'short int' || type.type === 'unsigned short int') {
+            return 16.2;
+        } else if (type.type === 'int' || type.type === 'unsigned int') {
+            return 16.3;
+        } else if (type.type === 'long int' || type.type === 'unsigned long int') {
+            return 32.1;
+        } else if (type.type === 'long long int' || type.type === 'unsigned long long int') {
+            return 64.1;
+        } else {
+            throw new Error(`This error should not occur, please report it (invalid type)`);
+        }
+    }
+
+    export function applyIntegerPromotions(type: Integer): Integer {
+        if (type.type === '_BitInt' || type.type === 'unsigned _BitInt') {
+            return type;
+        } else if (type.type === 'char' || type.type === 'signed char' || type.type === 'short int') {
+            return INT;
+        } else if (type.type === 'unsigned char' || type.type === 'unsigned short int') {
+            return UNSIGNED_INT;
+        } else {
+            return type;
+        }
+    }
+
+    export function isCastAllowed(from: Type, to: Type): boolean {
+        if (to.type === 'bool') {
+            return true;
+        } else if (isReal(to)) {
+            return isReal(from);
+        } else if (to.type === 'void') {
+            return true;
+        } else if (to.type === 'pointer' || to.type === 'nullptr_t') {
+            return from.type === 'pointer' || from.type === 'nullptr_t';
+        } else {
+            return isCompatible(to, from);
+        }
+    }
+
+    export function findCommonRealType(x: Real, y: Real): Real {
+        if (x.type === 'long double' || y.type === 'long double') {
+            return LONG_DOUBLE;
+        } else if (x.type === 'double' || y.type === 'double') {
+            return DOUBLE;
+        } else if (x.type === 'float' || y.type === 'float') {
+            return FLOAT;
+        } else if (x.type === '__builtin_float16' || y.type === '__builtin_float16') {
+            return BUILTIN_FLOAT16;
+        }
+        if (x.type === 'enum') {
+            x = x.underlying;
+        }
+        if (y.type === 'enum') {
+            y = y.underlying;
+        }
+        x = applyIntegerPromotions(x);
+        y = applyIntegerPromotions(y);
+        if (isSame(x, y)) {
+            return x;
+        }
+        if ((isSigned(x) && isSigned(y)) || (isUnsigned(x) && isUnsigned(y))) {
+            return getIntegerConversionRank(x) > getIntegerConversionRank(y) ? x : y;
+        }
+        let unsigned = (isUnsigned(x) ? x : y) as UnsignedInteger;
+        let signed = (isUnsigned(x) ? x : y) as SignedInteger;
+        if (getIntegerConversionRank(unsigned) > getIntegerConversionRank(signed)) {
+            return unsigned;
+        } else if (signed.bits > unsigned.bits) {
+            return signed;
+        } else {
+            return toUnsigned(signed);
+        }
     }
 
 }
@@ -555,73 +1031,83 @@ export namespace a {
 
     export type BaseExpression = BaseNode & {exprType: Type};
 
-    export type IdentifierExpression = BaseExpression & {type: 'identifier-expression', name: string};
+    // primary
+    export type IdentifierExpression = BaseExpression & {type: 'identifier-expression', name: string, variable: VariableData};
     export type IntegerConstant = BaseExpression & {type: 'integer-constant', value: bigint};
     export type FloatingConstant = BaseExpression & {type: 'floating-constant', value: number};
     export type CharacterConstant = BaseExpression & {type: 'character-constant', value: number};
     export type BooleanConstant = BaseExpression & {type: 'boolean-constant', value: boolean};
     export type NullptrConstant = BaseExpression & {type: 'nullptr-constant'};
     export type StringLiteral = BaseExpression & {type: 'string-literal', value: number[]};
-    export type ParenthesizedExpression = BaseExpression & {type: 'parenthesized-expression', value: Expression};
     export type GenericSelectionExpression = BaseExpression & {type: 'generic-selection'};
-    export type PrimaryExpression = IdentifierExpression | IntegerConstant | FloatingConstant | CharacterConstant | BooleanConstant | NullptrConstant | StringLiteral | ParenthesizedExpression | GenericSelectionExpression;
 
-    export type IndexExpression = BaseExpression & {type: 'index-expression', value: PostfixExpression, index: Expression};
-    export type FunctionCallExpression = BaseExpression & {type: 'function-call-expression', func: PostfixExpression, args: FullAssignmentExpression[]};
-    export type MemberExpression = BaseExpression & {type: 'member-expression', value: PostfixExpression, op: '.' | '->', member: IdentifierExpression};
-    export type ArithmeticPostfixExpression = BaseExpression & {type: 'arithmetic-postfix-expression', op: '++' | '--', value: PostfixExpression};
+    // postfix
+    export type IndexExpression = BaseExpression & {type: 'index-expression', value: Expression, index: Expression};
+    export type FunctionCallExpression = BaseExpression & {type: 'function-call-expression', func: Expression, args: Expression[]};
+    export type MemberExpression = BaseExpression & {type: 'member-expression', value: Expression, op: '.' | '->', member: IdentifierExpression, isBitField: boolean};
+    export type ArithmeticPostfixExpression = BaseExpression & {type: 'arithmetic-postfix-expression', op: '++' | '--', value: Expression};
     // todo: finish
     export type CompoundLiteral = BaseExpression & {type: 'compound-literal'};
-    export type PostfixExpression = PrimaryExpression | IndexExpression | FunctionCallExpression | MemberExpression | ArithmeticPostfixExpression | CompoundLiteral;
 
+    // unary
     export type ArithmeticUnaryExpression = BaseExpression & {type: 'arithmetic-unary-expression', op: '++' | '--', value: Expression};
-    export type BasicUnaryExpression = BaseExpression & {type: 'basic-unary-expression', op: '&' | '*' | '+' | '-' | '~' | '!', value: CastExpression};
-    export type SizeofValueExpression = BaseExpression & {type: 'sizeof-value-expression', value: UnaryExpression};
+    export type BasicUnaryExpression = BaseExpression & {type: 'basic-unary-expression', op: '&' | '*' | '+' | '-' | '~' | '!', value: Expression};
+    export type SizeofValueExpression = BaseExpression & {type: 'sizeof-value-expression', value: Expression};
     export type SizeofTypeExpression = BaseExpression & {type: 'sizeof-type-expression', value: TypeName};
     export type AlignofExpression = BaseExpression & {type: 'alignof-expression', value: TypeName};
-    export type UnaryExpression = PostfixExpression | ArithmeticUnaryExpression | BasicUnaryExpression | SizeofValueExpression | SizeofTypeExpression | AlignofExpression;
+    export type CastExpression = BaseExpression & {type: 'cast-expression', castTo: TypeName, value: Expression};
 
-    export type CastExpression = BaseExpression & {type: 'cast-expression', castTo: TypeName, value: UnaryExpression};
-    export type FullCastExpression = UnaryExpression | CastExpression;
+    // arithmetic
+    export type MultiplicativeExpression = BaseExpression & {type: 'multiplicative-expression', op: '*' | '/' | '%', left: Expression, right: Expression};
+    export type AdditiveExpression = BaseExpression & {type: 'additive-expression', op: '+' | '-', left: Expression, right: Expression};
+    export type ShiftExpression = BaseExpression & {type: 'shift-expression', op: '<<' | '>>', left: Expression, right: Expression};
 
-    export type MultiplicativeExpression = BaseExpression & {type: 'multiplicative-expression', op: '*' | '/' | '%', left: FullMultiplicativeExpression, right: FullCastExpression};
-    export type FullMultiplicativeExpression = FullCastExpression | MultiplicativeExpression;
+    // comparison
+    export type RelationalExpression = BaseExpression & {type: 'relational-expression', op: '<' | '>' | '<=' | '>=', left: Expression, right: Expression};
+    export type EqualityExpression = BaseExpression & {type: 'equality-expression', op: '==' | '!=', left: Expression, right: Expression};
 
-    export type AdditiveExpression = BaseExpression & {type: 'additive-expression', op: '+' | '-', left: FullAdditiveExpression, right: FullMultiplicativeExpression};
-    export type FullAdditiveExpression = FullMultiplicativeExpression | AdditiveExpression;
+    // bitwise/logical
+    export type BitwiseANDExpression = BaseExpression & {type: 'bitwise-and-expression', left: Expression, right: Expression};
+    export type BitwiseXORExpression = BaseExpression & {type: 'bitwise-xor-expression', left: Expression, right: Expression};
+    export type BitwiseORExpression = BaseExpression & {type: 'bitwise-or-expression', left: Expression, right: Expression};
+    export type LogicalANDExpression = BaseExpression & {type: 'logical-and-expression', left: Expression, right: Expression};
+    export type LogicalORExpression = BaseExpression & {type: 'logical-or-expression', left: Expression, right: Expression};
+    export type ConditionalExpression = BaseExpression & {type: 'conditional-expression', condition: Expression, true: Expression, false: Expression};
 
-    export type ShiftExpression = BaseExpression & {type: 'shift-expression', op: '<<' | '>>', left: FullShiftExpression, right: FullAdditiveExpression};
-    export type FullShiftExpression = FullAdditiveExpression | ShiftExpression;
-
-    export type RelationalExpression = BaseExpression & {type: 'relational-expression', op: '<' | '>' | '<=' | '>=', left: FullRelationalExpression, right: FullShiftExpression};
-    export type FullRelationalExpression = FullShiftExpression | RelationalExpression;
-
-    export type EqualityExpression = BaseExpression & {type: 'equality-expression', op: '==' | '!=', left: FullEqualityExpression, right: FullRelationalExpression};
-    export type FullEqualityExpression = FullRelationalExpression | EqualityExpression;
-
-    export type BitwiseANDExpression = BaseExpression & {type: 'bitwise-and-expression', left: FullBitwiseANDExpression, right: FullEqualityExpression};
-    export type FullBitwiseANDExpression = FullEqualityExpression | BitwiseANDExpression;
-
-    export type BitwiseXORExpression = BaseExpression & {type: 'bitwise-xor-expression', left: FullBitwiseXORExpression, right: FullBitwiseANDExpression};
-    export type FullBitwiseXORExpression = FullBitwiseANDExpression | BitwiseXORExpression;
-
-    export type BitwiseORExpression = BaseExpression & {type: 'bitwise-or-expression', left: FullBitwiseORExpression, right: FullBitwiseXORExpression};
-    export type FullBitwiseORExpression = FullBitwiseXORExpression | BitwiseORExpression;
-
-    export type LogicalANDExpression = BaseExpression & {type: 'logical-and-expression', left: FullLogicalANDExpression, right: FullBitwiseORExpression};
-    export type FullLogicalANDExpression = FullBitwiseORExpression | LogicalANDExpression;
-
-    export type LogicalORExpression = BaseExpression & {type: 'logical-or-expression', left: FullLogicalORExpression, right: FullLogicalANDExpression};
-    export type FullLogicalORExpression = FullLogicalANDExpression | LogicalORExpression;
-
-    export type ConditionalExpression = BaseExpression & {type: 'conditional-expression', condition: FullLogicalORExpression, true: FullConditionalExpression, false: FullConditionalExpression};
-    export type FullConditionalExpression = FullLogicalORExpression | ConditionalExpression;
-
-    export type AssignmentExpression = BaseExpression & {type: 'conditional-expression', op: '=' | '*=' | '/=' | '%=' | '+=' | '-=' | '<<=' | '>>=' | '&=' | '^=' | '|=', lvalue: UnaryExpression, rvalue: FullAssignmentExpression};
-    export type FullAssignmentExpression = FullConditionalExpression | AssignmentExpression;
-
+    // misc
+    export type AssignmentExpression = BaseExpression & {type: 'conditional-expression', op: '=' | '*=' | '/=' | '%=' | '+=' | '-=' | '<<=' | '>>=' | '&=' | '^=' | '|=', lvalue: Expression, rvalue: Expression};
     export type CommaExpression = BaseExpression & {type: 'comma-expression', left: Expression, right: AssignmentExpression};
-    export type Expression = FullAssignmentExpression | CommaExpression;
+
+    export type Expression = IdentifierExpression | IntegerConstant | FloatingConstant | CharacterConstant | BooleanConstant | NullptrConstant | StringLiteral | GenericSelectionExpression | IndexExpression | FunctionCallExpression | MemberExpression | ArithmeticPostfixExpression | CompoundLiteral | ArithmeticUnaryExpression | BasicUnaryExpression | SizeofValueExpression | SizeofTypeExpression | AlignofExpression | CastExpression | MultiplicativeExpression | AdditiveExpression | ShiftExpression | RelationalExpression | EqualityExpression | BitwiseANDExpression | BitwiseXORExpression | BitwiseORExpression | LogicalANDExpression | LogicalORExpression | ConditionalExpression | AssignmentExpression | CommaExpression;
+
+    export type Lvalue = (IdentifierExpression | MemberExpression | IndexExpression | (CastExpression & {value: Lvalue}) | (BasicUnaryExpression & {op: '*'})) & {exprType: t.Object};
+
+    export function isLvalue(value: Expression): value is Lvalue {
+        if (!t.isObject(value.exprType)) {
+            return false;
+        }
+        return Boolean(false
+            || value.type === 'identifier-expression'
+            || value.type === 'member-expression'
+            || value.type === 'index-expression'
+            || (value.type === 'cast-expression' && isLvalue(value.value))
+            || (value.type === 'basic-unary-expression' && value.op === '*')
+        );
+    }
+
+    export function isModifiableLvalue(value: Expression): boolean {
+        return isLvalue(value) && !value.exprType.const;
+    }
+
+    export function isBitField(value: Expression): boolean {
+        if (value.type === 'member-expression') {
+            return value.isBitField;
+        } else if (value.type === 'cast-expression') {
+            return isBitField(value.value);
+        } else {
+            return false;
+        }
+    }
 
     export type ExpressionStatement = BaseExpression & {type: 'expression-statement', value: Expression};
     export type Statement = ExpressionStatement;

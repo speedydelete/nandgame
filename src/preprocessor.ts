@@ -241,7 +241,7 @@ export class Preprocessor extends BaseParser<PreToken, PreMatcher> {
     peek<T extends Exclude<PreMatcher, EOF> = Exclude<PreMatcher, EOF>>(): PreMatcherReturnType<T> {
         let out = this.tokens[this.pos];
         if (out === undefined) {
-            this.error(`Unexpected end of input`);
+            this.error(undefined, `Unexpected end of input`);
         } else {
             return out as PreMatcherReturnType<T>;
         }
@@ -254,7 +254,7 @@ export class Preprocessor extends BaseParser<PreToken, PreMatcher> {
     advance<T extends Exclude<PreMatcher, EOF> = Exclude<PreMatcher, EOF>>(): PreMatcherReturnType<T> {
         let out = this.tokens[this.pos];
         if (out === undefined) {
-            this.error(`Unexpected end of input`);
+            this.error(undefined, `Unexpected end of input`);
         } else {
             this.pos++;
             return out as PreMatcherReturnType<T>;
@@ -295,7 +295,7 @@ export class Preprocessor extends BaseParser<PreToken, PreMatcher> {
         if (this._match(token, matcher)) {
             return;
         }
-        this.error(`Expected ${preMatcherToString(matcher)}, got ${preTokenToString(token)}`);
+        this.error(undefined, `Expected ${preMatcherToString(matcher)}, got ${preTokenToString(token)}`);
     }
 
     eat<T extends Exclude<PreMatcher, EOF>>(matcher: T): PreMatcherReturnType<T> {
@@ -821,11 +821,11 @@ export class Preprocessor extends BaseParser<PreToken, PreMatcher> {
 
     async pragma(): Promise<PreToken[]> {
         if (this.match('identifier STDC')) {
-            this.error(`Standard pragmas are not supported yet`);
+            this.error(undefined, `Standard pragmas are not supported yet`);
         } else if (this.match('identifier once')) {
             this.pragmaOncedFiles.add(this.currentFilePath);
         } else {
-            this.error(`Unknown pragma`);
+            this.error(undefined, `Unknown pragma`);
         }
         return [];
     }
@@ -867,7 +867,7 @@ export class Preprocessor extends BaseParser<PreToken, PreMatcher> {
             let id = this.eat('identifier').value;
             this.eatNonNewlineWhitespace();
             if (!this.match('\n')) {
-                this.error(`More than 1 token provided for #${directive} directive`);
+                this.error(undefined, `More than 1 token provided for #${directive} directive`);
             }
             value = this.macros.has(id);
             if (directive === 'ifndef') {
@@ -916,7 +916,7 @@ export class Preprocessor extends BaseParser<PreToken, PreMatcher> {
                     let id = this.eat('identifier').value;
                     this.eatNonNewlineWhitespace();
                     if (!this.match('\n')) {
-                        this.error(`More than 1 token provided for '#${directive2}' directive`);
+                        this.error(undefined, `More than 1 token provided for '#${directive2}' directive`);
                     }
                     value = this.macros.has(id);
                     if (directive2 === 'elifndef') {
@@ -933,7 +933,7 @@ export class Preprocessor extends BaseParser<PreToken, PreMatcher> {
         this.expandMacrosInCurrentLine();
         this.eatNonNewlineWhitespace();
         if (this.match('\n')) {
-            this.error(`No argument provided for #include directive`);
+            this.error(undefined, `No argument provided for #include directive`);
         }
         let name = this.getFilePath();
         this.eatNonNewlineWhitespace();
@@ -962,7 +962,7 @@ export class Preprocessor extends BaseParser<PreToken, PreMatcher> {
         this.expandMacrosInCurrentLine();
         this.eatNonNewlineWhitespace();
         if (this.match('\n')) {
-            this.error(`No argument provided for #include directive`);
+            this.error(undefined, `No argument provided for #include directive`);
         }
         let name = this.getFilePath();
         this.eatNonNewlineWhitespace();

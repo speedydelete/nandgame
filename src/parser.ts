@@ -114,7 +114,7 @@ export class Parser extends BaseParser<Token, Matcher> {
     peek<T extends Exclude<Matcher, EOF> = Exclude<Matcher, EOF>>(): MatcherReturnType<T> {
         let out = this.tokens[this.pos];
         if (out === undefined) {
-            this.error(`Unexpected end of input`);
+            this.error(undefined, `Unexpected end of input`);
         } else {
             return out as MatcherReturnType<T>;
         }
@@ -127,7 +127,7 @@ export class Parser extends BaseParser<Token, Matcher> {
     advance<T extends Exclude<Matcher, EOF> = Exclude<Matcher, EOF>>(): MatcherReturnType<T> {
         let out = this.tokens[this.pos];
         if (out === undefined) {
-            this.error(`Unexpected end of input`);
+            this.error(undefined, `Unexpected end of input`);
         } else {
             this.pos++;
             return out as MatcherReturnType<T>;
@@ -168,7 +168,7 @@ export class Parser extends BaseParser<Token, Matcher> {
         if (this._match(token, matcher)) {
             return;
         }
-        this.error(`Expected ${matcherToString(matcher)}, got ${tokenToString(token)}`);
+        this.error(undefined, `Expected ${matcherToString(matcher)}, got ${tokenToString(token)}`);
     }
 
     eat<T extends Exclude<Matcher, EOF>>(matcher: T): MatcherReturnType<T> {
@@ -309,7 +309,7 @@ export class Parser extends BaseParser<Token, Matcher> {
         if (!data) {
             this.error(token, `Variable '${token.value}' is not defined`);
         }
-        return this.createExpr(token.pos, 'identifier-expression', data.type, {name: token.value});
+        return this.createExpr(token.pos, 'identifier-expression', data.type, {name: token.value, variable: data});
     }
 
     integerConstant(): a.IntegerConstant {
@@ -399,7 +399,7 @@ export class Parser extends BaseParser<Token, Matcher> {
         return this.createExpr(token.pos, 'character-constant', type, {value: token.value});
     }
 
-    primaryExpression(): a.PrimaryExpression {
+    primaryExpression(): a.Expression {
         if (this.match('identifier')) {
             return this.identifierExpression();
         } else if (this.match('integer-constant')) {
@@ -423,37 +423,25 @@ export class Parser extends BaseParser<Token, Matcher> {
             let pos = this.advance().pos;
             let out = this.expression();
             this.eat(')');
-            return this.createExpr(pos, 'parenthesized-expression', out.exprType, {value: out});
+            return out;
         } else if (this.match('_Generic')) {
-            this.error(`_Generic is not supported yet`);
+            this.error(undefined, `_Generic is not supported yet`);
         } else {
-            this.error(`Expected primary expression`);
+            this.error(undefined, `Expected primary expression`);
         }
     }
 
-    isModifiableLvalue(value: a.Expression): boolean {
-        if (!t.isObject(value.exprType) || value.exprType.const) {
-            return false;
-        }
-        return Boolean(false
-            || value.type === 'identifier-expression'
-            || value.type === 'member-expression'
-            || value.type === 'index-expression'
-            || (value.type === 'basic-unary-expression' && value.op === '*')
-        );
-    }
-
-    indexExpression(value: a.PostfixExpression): a.IndexExpression {
+    indexExpression(value: a.Expression): a.IndexExpression {
         let pos = this.eat('[').pos;
         let index = this.expression();
         this.eat(']');
-        let type: t.Pointer | t.Array | t.IncompleteArray;
-        if (value.exprType.type === 'pointer' || value.exprType.type === 'array' || value.exprType.type === 'incomplete array') {
+        let type: t.Pointer | t.Array;
+        if (value.exprType.type === 'pointer' || value.exprType.type === 'array') {
             if (!t.isInteger(index.exprType)) {
                 this.error(pos, `Cannot add pointer and non-integer types`);
             }
             type = value.exprType;
-        } else if (index.exprType.type === 'pointer' || index.exprType.type === 'array' || index.exprType.type === 'incomplete array') {
+        } else if (index.exprType.type === 'pointer' || index.exprType.type === 'array') {
                 if (!t.isInteger(value.exprType)) {
                 this.error(pos, `Cannot add pointer and non-integer types`);
             }
@@ -465,14 +453,14 @@ export class Parser extends BaseParser<Token, Matcher> {
         return this.createExpr(pos, 'index-expression', derefType, {value, index});
     }
 
-    functionCallExpression(func: a.PostfixExpression): a.FunctionCallExpression {
+    functionCallExpression(func: a.Expression): a.FunctionCallExpression {
         let pos = this.eat('(').pos;
         if (func.exprType.type !== 'function') {
             this.error(pos, `Function being called is not a function`);
         }
-        let args: a.FullAssignmentExpression[] = [];
+        let args: a.Expression[] = [];
         while (!this.match(')')) {
-            args.push(this.fullAssignmentExpression());
+            args.push(this.assignmentExpression());
             if (this.match(',')) {
                 this.advance();
             } else {
@@ -483,7 +471,7 @@ export class Parser extends BaseParser<Token, Matcher> {
         return this.createExpr(pos, 'function-call-expression', func.exprType.returnType, {func, args});
     }
 
-    memberExpression(value: a.PostfixExpression): a.MemberExpression {
+    memberExpression(value: a.Expression): a.MemberExpression {
         let op = this.match('.') ? this.eat('.') : this.eat('->');
         let memberName = this.identifierExpression();
         let type = value.exprType;
@@ -493,7 +481,7 @@ export class Parser extends BaseParser<Token, Matcher> {
             }
             type = type.value;
         }
-        if (!this.isModifiableLvalue(value) || !(type.type === 'struct' || type.type === 'union')) {
+        if (!a.isModifiableLvalue(value) || !(type.type === 'struct' || type.type === 'union')) {
             if (op.value === '.') {
                 this.error(op, `Argument of . operator must be a struct or union, is of type ${t.toString(type)}`);
             } else {
@@ -503,33 +491,26 @@ export class Parser extends BaseParser<Token, Matcher> {
         if (type.const) {
             this.error(op, `Argument of ${op.value} operator must be modifiable`);
         }
-        let found = false;
         for (let member of type.members) {
             if (member.name === memberName.name) {
                 type = member.type;
-                found = true;
-                break;
+                let isBitField = Boolean(member.bitField);
+                return this.createExpr(op.pos, 'member-expression', type, {op: op.value, value, member: memberName, isBitField});
             }
         }
-        if (!found) {
-            this.error(memberName, `Member '${memberName.name}' does not exist in type ${t.toString(value.exprType)}`);
-        }
-        if (type.const) {
-            this.error(op, `Argument of ${op.value} operator must be modifiable`);
-        }
-        return this.createExpr(op.pos, 'member-expression', type, {op: op.value, value, member: memberName});
+        this.error(memberName, `Member '${memberName.name}' does not exist in type ${t.toString(value.exprType)}`);
     }
 
-    arithmeticPostfixExpression(value: a.PostfixExpression): a.ArithmeticPostfixExpression {
+    arithmeticPostfixExpression(value: a.Expression): a.ArithmeticPostfixExpression {
         let op = this.match('++') ? this.eat('++') : this.eat('--');
-        if (!this.isModifiableLvalue(value)) {
+        if (!a.isModifiableLvalue(value)) {
             this.error(op, `Argument to ${op.value} operator must be a modifiable lvalue`);
         }
         return this.createExpr(op.pos, 'arithmetic-postfix-expression', value.exprType, {op: op.value, value});
     }
 
     bracedInitializer(type: Type): unknown {
-
+        
     }
 
     compoundLiteral(): a.CompoundLiteral {
@@ -539,8 +520,8 @@ export class Parser extends BaseParser<Token, Matcher> {
         this.bracedInitializer(type.typeType);
     }
 
-    postfixExpression(): a.PostfixExpression {
-        let value: a.PostfixExpression;
+    postfixExpression(): a.Expression {
+        let value: a.Expression;
         let primary = this.try(this.primaryExpression);
         if (primary) {
             value = primary;
@@ -549,7 +530,7 @@ export class Parser extends BaseParser<Token, Matcher> {
             if (compound) {
                 value = compound;
             } else {
-                this.error(`Expected postfix expression`);
+                this.error(undefined, `Expected postfix expression`);
             }
         }
         while (true) {
@@ -571,7 +552,7 @@ export class Parser extends BaseParser<Token, Matcher> {
     arithmeticUnaryExpression(): a.ArithmeticUnaryExpression {
         let op = this.match('++') ? this.eat('++') : this.eat('--');
         let value = this.unaryExpression();
-        if (!this.isModifiableLvalue(value)) {
+        if (!a.isModifiableLvalue(value)) {
             this.error(op, `Argument to ${op.value} operator must be a modifiable lvalue`);
         }
         return this.createExpr(op.pos, 'arithmetic-unary-expression', value.exprType, {op: op.value, value});
@@ -579,35 +560,72 @@ export class Parser extends BaseParser<Token, Matcher> {
 
     basicUnaryExpression(): a.BasicUnaryExpression {
         let op = this.eat(['&', '*', '+', '-', '~', '!']) as SymbolToken;
-        let value = this.fullCastExpression();
+        let value = this.castExpression();
+        if (op.value === '&') {
+            if (!(value.exprType.type === 'function' || (a.isLvalue(value) && !a.isBitField(value)))) {
+                this.error(value, `Cannot take address of object`);
+            }
+            return this.createExpr(op.pos, 'basic-unary-expression', t.pointer(value.exprType), {op: '&', value});
+        } else if (op.value === '*') {
+            if (value.exprType.type !== 'pointer') {
+                if (value.exprType.type === 'nullptr_t') {
+                    this.error(op, `Attempt to dereference value of type nullptr_t`);
+                }
+                this.error(op, `Attempt to dereference non-pointer value`);
+            }
+            return this.createExpr(op.pos, 'basic-unary-expression', value.exprType.value, {op: '*', value});
+        } else if (op.value === '+') {
+            
+        } else {
+            throw new Error(`This error should not occur, please report it (invalid basic unary operator)`);
+        }
     }
 
-    unaryExpression(): a.UnaryExpression {
+    sizeofValueExpression(): a.SizeofValueExpression {
+        this.eat('sizeof');
+    }
+
+    sizeofTypeExpression(): a.SizeofTypeExpression {
+        this.eat('sizeof');
+    }
+
+    alignofExpression(): a.AlignofExpression {
+
+    }
+
+    unaryExpression(): a.Expression {
         if (this.match(['++', '--'])) {
             return this.arithmeticUnaryExpression();
         } else if (this.match(['&', '*', '+', '-', '~', '!'])) {
             return this.basicUnaryExpression();
+        } else if (this.match('sizeof')) {
+            let out = this.try(this.sizeofTypeExpression);
+            if (out) {
+                return out;
+            }
+            return this.sizeofValueExpression();
+        } else if (this.match('alignof')) {
+            return this.alignofExpression();
         } else {
             return this.postfixExpression();
         }
     }
 
-    castExpression(): a.CastExpression {
-        this.eat('(');
-    }
-
-    fullCastExpression(): a.FullCastExpression {
+    castExpression(): a.Expression {
         try {
-            return this.castExpression();
+            this.eat('(');
+            let type = this.typeName();
+            this.eat(')');
         } catch (error) {
             if (!(error instanceof CError)) {
                 throw error;
             }
             return this.unaryExpression();
         }
+
     }
 
-    fullAssignmentExpression(): a.FullAssignmentExpression {
+    assignmentExpression(): a.Expression {
 
     }
     
