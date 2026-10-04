@@ -1055,7 +1055,7 @@ export namespace a {
     export type SizeofValueExpression = BaseExpression & {type: 'sizeof-value-expression', value: Expression};
     export type SizeofTypeExpression = BaseExpression & {type: 'sizeof-type-expression', value: TypeName};
     export type AlignofExpression = BaseExpression & {type: 'alignof-expression', value: TypeName};
-    export type CastExpression = BaseExpression & {type: 'cast-expression', castTo: TypeName, value: Expression};
+    export type CastExpression = BaseExpression & {type: 'cast-expression', castTo: Type | TypeName, value: Expression};
 
     // arithmetic
     export type MultiplicativeExpression = BaseExpression & {type: 'multiplicative-expression', op: '*' | '/' | '%', left: Expression, right: Expression};
@@ -1114,6 +1114,6 @@ export namespace a {
     
     export type TypeName = BaseNode & {type: 'type-name', typeType: Type};
 
-    export type Node = Expression | Statement;
+    export type Node = Expression | Statement | TypeName;
 
 }

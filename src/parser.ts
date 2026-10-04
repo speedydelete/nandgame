@@ -299,8 +299,16 @@ export class Parser extends BaseParser<Token, Matcher> {
         return Object.assign(value, {pos, type}) as Extract<a.Node, {type: T}>;
     }
 
-    createExpr<T extends a.Expression['type']>(pos: Position, type: T, exprType: Type, value: Omit<Extract<a.Expression, {type: T}>, 'pos' | 'type' | 'exprType'>): Extract<a.Expression, {type: T}> {
-        return Object.assign(value, {pos, type, exprType}) as Extract<a.Expression, {type: T}>;
+    createExpr<T extends a.Expression['type'], U extends Type>(pos: Position, type: T, exprType: U, value: Omit<Extract<a.Expression, {type: T}>, 'pos' | 'type' | 'exprType'>): Extract<a.Expression, {type: T}> & {exprType: U} {
+        return Object.assign(value, {pos, type, exprType}) as Extract<a.Expression, {type: T}> & {exprType: U};
+    }
+
+    applyIntegerPromotions(pos: Position, value: a.Expression & {exprType: t.Integer}): a.Expression & {exprType: t.Integer} {
+        let type = t.applyIntegerPromotions(value.exprType);
+        if (t.isSame(value.exprType, type)) {
+            return value;
+        }
+        return this.createExpr(pos, 'cast-expression', type, {value, castTo: type});
     }
 
     identifierExpression(): a.IdentifierExpression {
@@ -431,7 +439,7 @@ export class Parser extends BaseParser<Token, Matcher> {
         }
     }
 
-    indexExpression(value: a.Expression): a.IndexExpression {
+    indexExpression(value: a.Expression): a.Expression {
         let pos = this.eat('[').pos;
         let index = this.expression();
         this.eat(']');
@@ -453,7 +461,7 @@ export class Parser extends BaseParser<Token, Matcher> {
         return this.createExpr(pos, 'index-expression', derefType, {value, index});
     }
 
-    functionCallExpression(func: a.Expression): a.FunctionCallExpression {
+    functionCallExpression(func: a.Expression): a.Expression {
         let pos = this.eat('(').pos;
         if (func.exprType.type !== 'function') {
             this.error(pos, `Function being called is not a function`);
@@ -471,7 +479,7 @@ export class Parser extends BaseParser<Token, Matcher> {
         return this.createExpr(pos, 'function-call-expression', func.exprType.returnType, {func, args});
     }
 
-    memberExpression(value: a.Expression): a.MemberExpression {
+    memberExpression(value: a.Expression): a.Expression {
         let op = this.match('.') ? this.eat('.') : this.eat('->');
         let memberName = this.identifierExpression();
         let type = value.exprType;
@@ -481,7 +489,7 @@ export class Parser extends BaseParser<Token, Matcher> {
             }
             type = type.value;
         }
-        if (!a.isModifiableLvalue(value) || !(type.type === 'struct' || type.type === 'union')) {
+        if (!(type.type === 'struct' || type.type === 'union')) {
             if (op.value === '.') {
                 this.error(op, `Argument of . operator must be a struct or union, is of type ${t.toString(type)}`);
             } else {
@@ -501,7 +509,7 @@ export class Parser extends BaseParser<Token, Matcher> {
         this.error(memberName, `Member '${memberName.name}' does not exist in type ${t.toString(value.exprType)}`);
     }
 
-    arithmeticPostfixExpression(value: a.Expression): a.ArithmeticPostfixExpression {
+    arithmeticPostfixExpression(value: a.Expression): a.Expression {
         let op = this.match('++') ? this.eat('++') : this.eat('--');
         if (!a.isModifiableLvalue(value)) {
             this.error(op, `Argument to ${op.value} operator must be a modifiable lvalue`);
@@ -549,7 +557,7 @@ export class Parser extends BaseParser<Token, Matcher> {
         return value;
     }
 
-    arithmeticUnaryExpression(): a.ArithmeticUnaryExpression {
+    arithmeticUnaryExpression(): a.Expression {
         let op = this.match('++') ? this.eat('++') : this.eat('--');
         let value = this.unaryExpression();
         if (!a.isModifiableLvalue(value)) {
@@ -558,12 +566,12 @@ export class Parser extends BaseParser<Token, Matcher> {
         return this.createExpr(op.pos, 'arithmetic-unary-expression', value.exprType, {op: op.value, value});
     }
 
-    basicUnaryExpression(): a.BasicUnaryExpression {
+    basicUnaryExpression(): a.Expression {
         let op = this.eat(['&', '*', '+', '-', '~', '!']) as SymbolToken;
         let value = this.castExpression();
         if (op.value === '&') {
             if (!(value.exprType.type === 'function' || (a.isLvalue(value) && !a.isBitField(value)))) {
-                this.error(value, `Cannot take address of object`);
+                this.error(value, `Cannot take address of object of type '${t.toString(value.exprType)}'`);
             }
             return this.createExpr(op.pos, 'basic-unary-expression', t.pointer(value.exprType), {op: '&', value});
         } else if (op.value === '*') {
@@ -571,11 +579,37 @@ export class Parser extends BaseParser<Token, Matcher> {
                 if (value.exprType.type === 'nullptr_t') {
                     this.error(op, `Attempt to dereference value of type nullptr_t`);
                 }
-                this.error(op, `Attempt to dereference non-pointer value`);
+                this.error(op, `Cannot use unary * operator on non-pointer value of type '${t.toString(value.exprType)}'`);
             }
             return this.createExpr(op.pos, 'basic-unary-expression', value.exprType.value, {op: '*', value});
         } else if (op.value === '+') {
-            
+            if (!t.isArithmetic(value.exprType)) {
+                this.error(op, `Cannot use unary + operator on non-arithmetic type '${t.toString(value.exprType)}'`);
+            }
+            if (t.isInteger(value.exprType)) {
+                return this.applyIntegerPromotions(op.pos, this.createExpr(op.pos, 'basic-unary-expression', value.exprType, {op: '+', value}));
+            } else {
+                return this.createExpr(op.pos, 'basic-unary-expression', value.exprType, {op: '+', value});
+            }
+        } else if (op.value === '-') {
+            if (!t.isArithmetic(value.exprType)) {
+                this.error(op, `Cannot use unary - operator on non-arithmetic type '${t.toString(value.exprType)}'`);
+            }
+            if (t.isInteger(value.exprType)) {
+                return this.applyIntegerPromotions(op.pos, this.createExpr(op.pos, 'basic-unary-expression', value.exprType, {op: '-', value}));
+            } else {
+                return this.createExpr(op.pos, 'basic-unary-expression', value.exprType, {op: '-', value});
+            }
+        } else if (op.value === '~') {
+            if (!t.isInteger(value.exprType)) {
+                this.error(op, `Cannot use unary ~ operator on non-integer type '${t.toString(value.exprType)}'`);
+            }
+            return this.applyIntegerPromotions(op.pos, this.createExpr(op.pos, 'basic-unary-expression', value.exprType, {op: '~', value}));
+        } else if (op.value === '!') {
+            if (!t.isScalar(value.exprType)) {
+                this.error(op, `Cannot use unary ! operator on non-scalar type '${t.toString(value.exprType)}'`);
+            }
+            return this.createExpr(op.pos, 'basic-unary-expression', t.INT, {op: '!', value});
         } else {
             throw new Error(`This error should not occur, please report it (invalid basic unary operator)`);
         }
