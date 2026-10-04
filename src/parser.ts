@@ -537,8 +537,8 @@ export class Parser extends BaseParser<Token, Matcher> {
         return this.createExpr(op.pos, 'arithmetic-postfix-expression', value.exprType, {op: op.value, value});
     }
 
-    bracedInitializer(type: Type): unknown {
-        
+    bracedInitializer(type: Type): never {
+        this.error(undefined, `Initializers are not supported yet`);
     }
 
     compoundLiteral(): a.Expression {
