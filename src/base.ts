@@ -863,6 +863,20 @@ export namespace t {
         }
     }
 
+    export function isCastAllowed(from: Type, to: Type): boolean {
+        if (to.type === 'bool') {
+            return true;
+        } else if (isReal(to)) {
+            return isReal(from);
+        } else if (to.type === 'void') {
+            return true;
+        } else if (to.type === 'pointer' || to.type === 'nullptr_t') {
+            return from.type === 'pointer' || from.type === 'nullptr_t';
+        } else {
+            return isCompatible(to, from);
+        }
+    }
+
     export function getIntegerConversionRank(type: Integer): number {
         if (type.type === 'enum') {
             type = type.underlying;
@@ -900,21 +914,7 @@ export namespace t {
         }
     }
 
-    export function isCastAllowed(from: Type, to: Type): boolean {
-        if (to.type === 'bool') {
-            return true;
-        } else if (isReal(to)) {
-            return isReal(from);
-        } else if (to.type === 'void') {
-            return true;
-        } else if (to.type === 'pointer' || to.type === 'nullptr_t') {
-            return from.type === 'pointer' || from.type === 'nullptr_t';
-        } else {
-            return isCompatible(to, from);
-        }
-    }
-
-    export function findCommonRealType(x: Real, y: Real): Real {
+    export function findCommonRealType(x: Arithmetic, y: Arithmetic): Arithmetic {
         if (x.type === 'long double' || y.type === 'long double') {
             return LONG_DOUBLE;
         } else if (x.type === 'double' || y.type === 'double') {
@@ -1079,6 +1079,11 @@ export namespace a {
     export type CommaExpression = BaseExpression & {type: 'comma-expression', left: Expression, right: AssignmentExpression};
 
     export type Expression = IdentifierExpression | IntegerConstant | FloatingConstant | CharacterConstant | BooleanConstant | NullptrConstant | StringLiteral | GenericSelectionExpression | IndexExpression | FunctionCallExpression | MemberExpression | ArithmeticPostfixExpression | CompoundLiteral | ArithmeticUnaryExpression | BasicUnaryExpression | SizeofValueExpression | SizeofTypeExpression | AlignofExpression | CastExpression | MultiplicativeExpression | AdditiveExpression | ShiftExpression | RelationalExpression | EqualityExpression | BitwiseANDExpression | BitwiseXORExpression | BitwiseORExpression | LogicalANDExpression | LogicalORExpression | ConditionalExpression | AssignmentExpression | CommaExpression;
+
+    export type IntegerExpression = Expression & {exprType: t.Integer};
+    export function isIntegerExpression(value: Expression): value is IntegerExpression {
+        return t.isInteger(value.exprType);
+    }
 
     export type Lvalue = (IdentifierExpression | MemberExpression | IndexExpression | (CastExpression & {value: Lvalue}) | (BasicUnaryExpression & {op: '*'})) & {exprType: t.Object};
 

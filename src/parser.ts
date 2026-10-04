@@ -303,12 +303,24 @@ export class Parser extends BaseParser<Token, Matcher> {
         return Object.assign(value, {pos, type, exprType}) as Extract<a.Expression, {type: T}> & {exprType: U};
     }
 
-    applyIntegerPromotions(pos: Position, value: a.Expression & {exprType: t.Integer}): a.Expression & {exprType: t.Integer} {
-        let type = t.applyIntegerPromotions(value.exprType);
+    cast<T extends Type>(pos: Position, value: a.Expression, type: T): a.Expression & {exprType: T} {
         if (t.isSame(value.exprType, type)) {
-            return value;
+            return value as a.Expression & {exprType: T};
         }
         return this.createExpr(pos, 'cast-expression', type, {value, castTo: type});
+    }
+
+    applyIntegerPromotions(pos: Position, value: a.IntegerExpression): a.IntegerExpression {
+        let type = t.applyIntegerPromotions(value.exprType);
+        return this.cast(pos, value, type);
+    }
+
+    decayArrays(pos: Position, value: a.Expression): a.Expression {
+        if (value.exprType.type === 'array') {
+            return this.cast(pos, value, t.pointer(value.exprType.items));
+        } else {
+            return value;
+        }
     }
 
     identifierExpression(): a.IdentifierExpression {
@@ -428,7 +440,7 @@ export class Parser extends BaseParser<Token, Matcher> {
         } else if (this.match('string-literal')) {
             return this.stringLiteral();
         } else if (this.match('(')) {
-            let pos = this.advance().pos;
+            this.advance();
             let out = this.expression();
             this.eat(')');
             return out;
@@ -441,28 +453,29 @@ export class Parser extends BaseParser<Token, Matcher> {
 
     indexExpression(value: a.Expression): a.Expression {
         let pos = this.eat('[').pos;
-        let index = this.expression();
+        value = this.decayArrays(pos, value);
+        let index = this.decayArrays(pos, this.expression());
         this.eat(']');
-        let type: t.Pointer | t.Array;
-        if (value.exprType.type === 'pointer' || value.exprType.type === 'array') {
+        let type: t.Pointer;
+        if (value.exprType.type === 'pointer') {
             if (!t.isInteger(index.exprType)) {
                 this.error(pos, `Cannot add pointer and non-integer types`);
             }
             type = value.exprType;
-        } else if (index.exprType.type === 'pointer' || index.exprType.type === 'array') {
+        } else if (index.exprType.type === 'pointer') {
                 if (!t.isInteger(value.exprType)) {
                 this.error(pos, `Cannot add pointer and non-integer types`);
             }
             type = index.exprType;
         } else {
-            this.error(pos, `One of the arguments to the indexing operator must be a pointer or array`);
+            this.error(pos, `One of the arguments to the indexing operator must be a pointer`);
         }
-        let derefType = type.type === 'pointer' ? type.value : type.items;
-        return this.createExpr(pos, 'index-expression', derefType, {value, index});
+        return this.createExpr(pos, 'index-expression', type.value, {value, index});
     }
 
     functionCallExpression(func: a.Expression): a.Expression {
         let pos = this.eat('(').pos;
+        func = this.decayArrays(pos, func);
         if (func.exprType.type !== 'function') {
             this.error(pos, `Function being called is not a function`);
         }
@@ -481,6 +494,7 @@ export class Parser extends BaseParser<Token, Matcher> {
 
     memberExpression(value: a.Expression): a.Expression {
         let op = this.match('.') ? this.eat('.') : this.eat('->');
+        value = this.decayArrays(op.pos, value);
         let memberName = this.identifierExpression();
         let type = value.exprType;
         if (op.value === '->') {
@@ -503,7 +517,12 @@ export class Parser extends BaseParser<Token, Matcher> {
             if (member.name === memberName.name) {
                 type = member.type;
                 let isBitField = Boolean(member.bitField);
-                return this.createExpr(op.pos, 'member-expression', type, {op: op.value, value, member: memberName, isBitField});
+                return this.createExpr(op.pos, 'member-expression', type, {
+                    op: op.value,
+                    value,
+                    member: memberName,
+                    isBitField,
+                });
             }
         }
         this.error(memberName, `Member '${memberName.name}' does not exist in type ${t.toString(value.exprType)}`);
@@ -511,6 +530,7 @@ export class Parser extends BaseParser<Token, Matcher> {
 
     arithmeticPostfixExpression(value: a.Expression): a.Expression {
         let op = this.match('++') ? this.eat('++') : this.eat('--');
+        value = this.decayArrays(op.pos, value);
         if (!a.isModifiableLvalue(value)) {
             this.error(op, `Argument to ${op.value} operator must be a modifiable lvalue`);
         }
@@ -575,39 +595,44 @@ export class Parser extends BaseParser<Token, Matcher> {
             }
             return this.createExpr(op.pos, 'basic-unary-expression', t.pointer(value.exprType), {op: '&', value});
         } else if (op.value === '*') {
+            value = this.decayArrays(op.pos, value);
             if (value.exprType.type !== 'pointer') {
                 if (value.exprType.type === 'nullptr_t') {
-                    this.error(op, `Attempt to dereference value of type nullptr_t`);
+                    this.error(op, `Cannot dereference value of type nullptr_t`);
                 }
-                this.error(op, `Cannot use unary * operator on non-pointer value of type '${t.toString(value.exprType)}'`);
+                this.error(op, `Cannot use unary * operator on value of non-pointer value of type '${t.toString(value.exprType)}'`);
             }
             return this.createExpr(op.pos, 'basic-unary-expression', value.exprType.value, {op: '*', value});
         } else if (op.value === '+') {
+            value = this.decayArrays(op.pos, value);
             if (!t.isArithmetic(value.exprType)) {
-                this.error(op, `Cannot use unary + operator on non-arithmetic type '${t.toString(value.exprType)}'`);
+                this.error(op, `Cannot use unary + operator on value of non-arithmetic type '${t.toString(value.exprType)}'`);
             }
-            if (t.isInteger(value.exprType)) {
+            if (a.isIntegerExpression(value)) {
                 return this.applyIntegerPromotions(op.pos, this.createExpr(op.pos, 'basic-unary-expression', value.exprType, {op: '+', value}));
             } else {
                 return this.createExpr(op.pos, 'basic-unary-expression', value.exprType, {op: '+', value});
             }
         } else if (op.value === '-') {
+            value = this.decayArrays(op.pos, value);
             if (!t.isArithmetic(value.exprType)) {
-                this.error(op, `Cannot use unary - operator on non-arithmetic type '${t.toString(value.exprType)}'`);
+                this.error(op, `Cannot use unary - operator on value of non-arithmetic type '${t.toString(value.exprType)}'`);
             }
-            if (t.isInteger(value.exprType)) {
+            if (a.isIntegerExpression(value)) {
                 return this.applyIntegerPromotions(op.pos, this.createExpr(op.pos, 'basic-unary-expression', value.exprType, {op: '-', value}));
             } else {
                 return this.createExpr(op.pos, 'basic-unary-expression', value.exprType, {op: '-', value});
             }
         } else if (op.value === '~') {
-            if (!t.isInteger(value.exprType)) {
-                this.error(op, `Cannot use unary ~ operator on non-integer type '${t.toString(value.exprType)}'`);
+            value = this.decayArrays(op.pos, value);
+            if (!a.isIntegerExpression(value)) {
+                this.error(op, `Cannot use unary ~ operator on value of non-integer type '${t.toString(value.exprType)}'`);
             }
             return this.applyIntegerPromotions(op.pos, this.createExpr(op.pos, 'basic-unary-expression', value.exprType, {op: '~', value}));
         } else if (op.value === '!') {
+            value = this.decayArrays(op.pos, value);
             if (!t.isScalar(value.exprType)) {
-                this.error(op, `Cannot use unary ! operator on non-scalar type '${t.toString(value.exprType)}'`);
+                this.error(op, `Cannot use unary ! operator on value of non-scalar type '${t.toString(value.exprType)}'`);
             }
             return this.createExpr(op.pos, 'basic-unary-expression', t.INT, {op: '!', value});
         } else {
@@ -683,11 +708,120 @@ export class Parser extends BaseParser<Token, Matcher> {
     multiplicativeExpression(): a.Expression {
         let value = this.castExpression();
         while (true) {
-            if (!(this.match('*') || this.match('/') || this.match('%'))) {
+            if (!this.match(['*', '/', '%'])) {
                 break;
             }
             let op = this.advance<'*' | '/' | '%'>();
-            let arg = this.castExpression();
+            value = this.decayArrays(op.pos, value);
+            let arg = this.decayArrays(op.pos, this.castExpression());
+            if (!t.isArithmetic(value.exprType)) {
+                this.error(value, `Cannot use ${op} operator on value of non-arithmetic type '${t.toString(value.exprType)}'`);
+            }
+            if (!t.isArithmetic(arg.exprType)) {
+                this.error(arg, `Cannot use ${op} operator on value of non-arithmetic type '${t.toString(arg.exprType)}'`);
+            }
+            let type = t.findCommonRealType(value.exprType, arg.exprType);
+            value = this.createExpr(op.pos, 'multiplicative-expression', type, {
+                op: op.value,
+                left: this.cast(op.pos, value, type),
+                right: this.cast(op.pos, arg, type),
+            });
+        }
+        return value;
+    }
+
+    additiveExpression(): a.Expression {
+        let value = this.multiplicativeExpression();
+        while (true) {
+            if (!this.match(['+', '-'])) {
+                break;
+            }
+            let op = this.advance<'+' | '-'>();
+            value = this.decayArrays(op.pos, value);
+            let arg = this.decayArrays(op.pos, this.multiplicativeExpression());
+            if (t.isArithmetic(value.exprType) && t.isArithmetic(arg.exprType)) {
+                let type = t.findCommonRealType(value.exprType, arg.exprType);
+                value = this.createExpr(op.pos, 'additive-expression', type, {
+                    op: op.value,
+                    left: this.cast(op.pos, value, type),
+                    right: this.cast(op.pos, value, type),
+                });
+            } else {
+                let type: Type;
+                if (t.isArithmetic(arg.exprType)) {
+                    if (value.exprType.type === 'pointer') {
+                        type = value.exprType.value;
+                    } else {
+                        this.error(op.pos, `Cannot use ${op} operator on values of type ${t.toString(value.exprType)} and ${t.toString(arg.exprType)}`);
+                    }
+                } else if (arg.exprType.type === 'pointer') {
+                    if (t.isArithmetic(value.exprType)) {
+                        type = arg.exprType.value;
+                    } else if (op.value === '-' && value.exprType.type === 'pointer') {
+                        if (!t.isCompatible(value.exprType.value, arg.exprType.value)) {
+                            this.error(op.pos, `Cannot use ${op} operator on values of type ${t.toString(value.exprType)} and ${t.toString(arg.exprType)}`);
+                        }
+                        // ptrdiff_t is int
+                        type = t.INT;
+                    } else {
+                        this.error(op.pos, `Cannot use ${op} operator on values of type ${t.toString(value.exprType)} and ${t.toString(arg.exprType)}`);
+                    }
+                } else {
+                    this.error(op.pos, `Cannot use ${op} operator on values of type ${t.toString(value.exprType)} and ${t.toString(arg.exprType)}`);
+                }
+                value = this.createExpr(op.pos, 'additive-expression', type, {op: op.value, left: value, right: arg});
+            }
+        }
+        return value;
+    }
+
+    shiftExpression(): a.Expression {
+        let value = this.additiveExpression();
+        while (true) {
+            if (!this.match(['<<', '>>'])) {
+                break;
+            }
+            let op = this.advance<'<<' | '>>'>();
+            value = this.decayArrays(op.pos, value);
+            let arg = this.decayArrays(op.pos, this.additiveExpression());
+            if (!a.isIntegerExpression(value)) {
+                this.error(value, `Cannot use ${op} operator on value of non-integer type '${t.toString(value.exprType)}'`);
+            }
+            if (!a.isIntegerExpression(arg)) {
+                this.error(arg, `Cannot use ${op} operator on value of non-integer type '${t.toString(arg.exprType)}'`);
+            }
+            value = this.applyIntegerPromotions(op.pos, value);
+            arg = this.applyIntegerPromotions(op.pos, arg);
+            value = this.createExpr(op.pos, 'shift-expression', value.exprType, {op: op.value, left: value, right: arg});
+        }
+        return value;
+    }
+
+    relationalExpression(): a.Expression {
+        let value = this.shiftExpression();
+        while (true) {
+            if (!this.match(['<', '>', '<=', '>='])) {
+                break;
+            }
+            let op = this.advance<'<' | '>' | '<=' | '>='>();
+            value = this.decayArrays(op.pos, value);
+            let arg = this.decayArrays(op.pos, this.shiftExpression());
+            if (t.isReal(value.exprType) && t.isReal(arg.exprType)) {
+                let type = t.findCommonRealType(value.exprType, arg.exprType);
+                value = this.createExpr(op.pos, 'relational-expression', t.INT, {
+                    op: op.value,
+                    left: this.cast(op.pos, value, type),
+                    right: this.cast(op.pos, arg, type),
+                });
+            } else if (value.exprType.type === 'pointer' && arg.exprType.type === 'pointer') {
+                return this.createExpr(op.pos, 'relational-expression', t.INT, {
+                    op: op.value,
+                    left: value,
+                    right: arg,
+                });
+            } else {
+                this.error(value, `Cannot use ${op} operator on values of types '${t.toString(value.exprType)}' and '${t.toString(arg.exprType)}`);
+            }
         }
         return value;
     }
