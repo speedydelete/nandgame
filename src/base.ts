@@ -1088,7 +1088,7 @@ export namespace a {
     export type Lvalue = (IdentifierExpression | MemberExpression | IndexExpression | (CastExpression & {value: Lvalue}) | (BasicUnaryExpression & {op: '*'})) & {exprType: t.Object};
 
     export function isLvalue(value: Expression): value is Lvalue {
-        if (!t.isObject(value.exprType)) {
+        if (!(t.isObject(value.exprType) && t.isComplete(value.exprType))) {
             return false;
         }
         return Boolean(false
