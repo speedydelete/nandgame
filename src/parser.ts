@@ -315,7 +315,7 @@ export class Parser extends BaseParser<Token, Matcher> {
         return this.cast(pos, value, type);
     }
 
-    decayArrays(pos: Position, value: a.Expression): a.Expression {
+    decayArrays(pos: Position, value: a.Expression): 'NOW GO MAKE IT THE REST OF THE CONVERSIONS IN 6.3.3.1 ALSO USE https://cstd.eisie.net/c2y.html!!!!!' {
         if (value.exprType.type === 'array') {
             return this.cast(pos, value, t.pointer(value.exprType.items));
         } else {
