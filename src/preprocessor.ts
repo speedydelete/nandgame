@@ -1,19 +1,17 @@
 
-// implements translation phases 1, 2, 3, 4, 5, and 6
-
 import * as path from 'node:path';
 
-import {simplePositionToString, MacroPositionData, Position, BaseDoer, BaseToken, EOF, BaseParser, a} from './base.js';
+import {simplePositionToString, MacroPositionData, Position, BaseDoer, BaseToken, EOF, BaseParser} from './c_base.js';
 
 
 export const IDENTIFIER_REGEX = /^\p{XID_Start}\p{XID_Continue}*$/u;
 
-export const UNIVERSAL_CHARACTER_REGEX = /^(\\u[0-9A-Fa-f]{4}([0-9a-fA-F]{4})?)$/u;
+export const UNIVERSAL_CHARACTER_NAME_REGEX = /^(\\u[0-9A-Fa-f]{4}([0-9a-fA-F]{4})?)$/u;
 
-export type CharacterConstantPrefix = 'u8' | 'u' | 'U' | 'L';
+export type CharacterLiteralPrefix = 'u8' | 'u' | 'U' | 'L';
 
-export const ESCAPE_SEQUENCE_REGEX = /^((\\)(['"?\\abfnrtv]|[0-7]{1,3}|x[0-9a-fA-F]+))/u;
-export const CHARACTER_CONSTANT_REGEX = /^((u8|u|U|L)'([^'\\]|((\\)(['"?\\abfnrtv0]|[0-7]{1,3}|x[0-9a-fA-F]+)))+')/u;
+export const ESCAPE_SEQUENCE_REGEX = /^((\\)(['"?\\abfnrtv]|[0-7]{1,3}|o\{[0-7]{1,3}\}|x[0-9a-fA-F]+|x\{[0-9a-fA-F]+\}))/u;
+export const CHARACTER_LITERAL_REGEX = /^((u8|u|U|L)'([^'\\]|((\\)(['"?\\abfnrtv0]|[0-7]{1,3}|o\{[0-7]{1,3}\}|x[0-9a-fA-F]+|x\{[0-9a-fA-F]+\})))+')/u;
 
 export function parseEscapeSequence(value: string): string {
     value = value.slice(1);
@@ -35,19 +33,29 @@ export function parseEscapeSequence(value: string): string {
         return '\v';
     } else if (value === '0') {
         return '\0';
+    } else if (value.startsWith('o')) {
+        value = value.slice(1);
+        if (value.startsWith('{')) {
+            value = value.slice(1, -1);
+        }
+        return String.fromCodePoint(parseInt(value, 16));
     } else if (value.startsWith('x')) {
-        return String.fromCodePoint(parseInt(value.slice(1), 16));
+        value = value.slice(1);
+        if (value.startsWith('{')) {
+            value = value.slice(1, -1);
+        }
+        return String.fromCodePoint(parseInt(value, 8));
     } else {
         return String.fromCodePoint(parseInt(value, 8));
     }
 }
 
-export function parseStringLiteral(value: string): [number[], CharacterConstantPrefix | undefined] | false {
-    let prefix: CharacterConstantPrefix | undefined;
+export function parseStringLiteral(value: string): [number[], CharacterLiteralPrefix | undefined] | false {
+    let prefix: CharacterLiteralPrefix | undefined;
     let match = value.match(/^(u8|u|U|L)/);
     if (match) {
         value = value.slice(match[0].length);
-        prefix = match[0] as CharacterConstantPrefix;
+        prefix = match[0] as CharacterLiteralPrefix;
     }
     if (!(value.startsWith('"') && value.endsWith('"'))) {
         return false;
@@ -96,14 +104,14 @@ export type PreWhitespaceToken = BaseToken & {type: 'whitespace', value: Whitesp
 export type PreHeaderNameToken = BaseToken & {type: 'header-name', value: string};
 export type PreIdentifierToken = BaseToken & {type: 'identifier', value: string};
 export type PreNumberToken = BaseToken & {type: 'number', value: string};
-export type PreCharacterConstantToken = BaseToken & {type: 'char-constant', value: number, prefix?: CharacterConstantPrefix, raw: string};
-export type PreStringLiteralToken = BaseToken & {type: 'string-literal', value: number[], prefix?: CharacterConstantPrefix, raw: string};
+export type PreCharacterLiteralToken = BaseToken & {type: 'character-literal', value: number, prefix?: CharacterLiteralPrefix, raw: string};
+export type PreStringLiteralToken = BaseToken & {type: 'string-literal', value: number[], prefix?: CharacterLiteralPrefix, raw: string};
 export type PreSymbolToken<T extends CSymbol = CSymbol> = BaseToken & {type: 'symbol', value: T};
-export type PreUniversalCharacterToken = BaseToken & {type: 'universal-char', value: string};
+export type PreUniversalCharacterToken = BaseToken & {type: 'universal-character-name', value: string};
 export type PreOtherToken = BaseToken & {type: 'other', value: string};
 export type PrePlacemarkerToken = BaseToken & {type: 'placemarker'};
 
-export type PreToken = PreWhitespaceToken | PreHeaderNameToken | PreIdentifierToken | PreNumberToken | PreCharacterConstantToken | PreStringLiteralToken | PreSymbolToken | PreUniversalCharacterToken | PreOtherToken | PrePlacemarkerToken;
+export type PreToken = PreWhitespaceToken | PreHeaderNameToken | PreIdentifierToken | PreNumberToken | PreCharacterLiteralToken | PreStringLiteralToken | PreSymbolToken | PreUniversalCharacterToken | PreOtherToken | PrePlacemarkerToken;
 
 export const STRING_PRE_TOKEN_NAMES: {[K in Whitespace | PreToken['type']]: string} = {
     ' ': 'space',
@@ -115,16 +123,16 @@ export const STRING_PRE_TOKEN_NAMES: {[K in Whitespace | PreToken['type']]: stri
     'header-name': 'header name',
     'identifier': 'identifier',
     'number': 'number',
-    'char-constant': 'character constant',
+    'character-literal': 'character literal',
     'string-literal': 'string literal',
     'symbol': 'symbol',
-    'universal-char': 'universal character name',
+    'universal-character-name': 'universal character name',
     'other': 'other',
     'placemarker': 'placemarker',
 };
 
 export function getPreTokenRaw(token: PreToken): string {
-    if (token.type === 'char-constant' || token.type === 'string-literal') {
+    if (token.type === 'character-literal' || token.type === 'string-literal') {
         return token.raw;
     } else if (token.type === 'placemarker') {
         return '';
@@ -318,15 +326,15 @@ export class Preprocessor extends BaseParser<PreToken, PreMatcher> {
             return {pos, type: 'identifier', value};
         } else if (value.match(PREPROCESSING_NUMBER_REGEX)) {
             return {pos, type: 'number', value};
-        } else if (value.match(CHARACTER_CONSTANT_REGEX)) {
-            let prefix = value.slice(0, value.indexOf(`'`)) as CharacterConstantPrefix;
+        } else if (value.match(CHARACTER_LITERAL_REGEX)) {
+            let prefix = value.slice(0, value.indexOf(`'`)) as CharacterLiteralPrefix;
             let array = Array.from(value);
             let number = array[array.indexOf(`'`) + 1].codePointAt(0) as number;
-            return {pos, type: 'char-constant', value: number, prefix, raw: value};
+            return {pos, type: 'character-literal', value: number, prefix, raw: value};
         } else if (SYMBOLS.has(value as CSymbol)) {
             return {pos, type: 'symbol', value: value as CSymbol};
-        } else if (value.match(UNIVERSAL_CHARACTER_REGEX)) {
-            return {pos, type: 'universal-char', value};
+        } else if (value.match(UNIVERSAL_CHARACTER_NAME_REGEX)) {
+            return {pos, type: 'universal-character-name', value};
         } else {
             return false;
         }

@@ -17,10 +17,7 @@ export interface MacroPositionData {
     pos: SimplePosition;
 }
 
-export interface Position {
-    file: string;
-    line: number;
-    col: number;
+export interface Position extends SimplePosition {
     func?: string;
     macro?: MacroPositionData[];
 }
@@ -188,7 +185,7 @@ export abstract class BaseParser<Token extends BaseToken, Matcher extends EOF | 
 
 export namespace t {
 
-    export type BaseObject = {const?: boolean, volatile?: boolean, align?: number};
+    export type BaseObject = {const?: boolean, volatile?: boolean, align?: number, attributes?: Set<string>};
 
     export const BOOL = {type: 'bool', size: 1, bits: 1} as const;
     export type Bool = BaseObject & typeof BOOL;
@@ -280,13 +277,13 @@ export namespace t {
         return type.type === 'char' || type.type === 'signed char' || type.type === 'unsigned char';
     }
 
-    export type EnumeratedMember = {name: string, value: bigint};
-    export type Enumerated = BaseObject & {type: 'enum', size: number, tag?: string, underlying: Char | SignedInteger | UnsignedInteger, members: EnumeratedMember[]};
-    export function createEnumerated(underlying: Char | SignedInteger | UnsignedInteger, members: EnumeratedMember[]): Enumerated {
+    export type EnumMember = {name: string, value: bigint};
+    export type Enum = BaseObject & {type: 'enum', size: number, tag?: string, underlying: Char | SignedInteger | UnsignedInteger, members: EnumMember[]};
+    export function enum_(underlying: Char | SignedInteger | UnsignedInteger, members: EnumMember[]): Enum {
         return {type: 'enum', size: underlying.size, underlying, members};
     }
 
-    export type Integer = Char | SignedInteger | UnsignedInteger | Enumerated;
+    export type Integer = Char | SignedInteger | UnsignedInteger | Enum;
     export function isInteger(type: Type): type is Integer {
         return type.type === 'char' || isSignedInteger(type) || isUnsignedInteger(type) || type.type === 'enum';
     }
@@ -296,19 +293,19 @@ export namespace t {
         return isInteger(type) || isFloating(type);
     }
 
-    export type Arithmetic = Integer | Floating;
+    export type Arithmetic = Real;
     export function isArithmetic(type: Type): type is Arithmetic {
-        return isInteger(type) || isFloating(type);
+        return isReal(type);
     }
 
     export const VOID = {type: 'void'} as const;
     export type Void = BaseObject & typeof VOID;
 
     export type SizedArray = BaseObject & {type: 'array', size: number, items: CompleteType, length: number};
-    export type VariableLengthArray = BaseObject & {type: 'array', size: undefined, items: CompleteType, length: '*' | a.Expression};
+    export type VariableLengthArray = BaseObject & {type: 'array', size: undefined, items: CompleteType, scope: Scope, length: '*' | Address};
     export type IncompleteArray = BaseObject & {type: 'array', size: undefined, items: CompleteType, length: undefined};
     export type Array = SizedArray | VariableLengthArray | IncompleteArray;
-    export function array(items: CompleteType, length: number | undefined | '*' | a.Expression): Array {
+    export function array(items: CompleteType, length: number | undefined | '*' | Address): Array {
         let size: number | undefined = undefined;
         if (typeof items.size === 'number' && typeof length === 'number') {
             size = items.size * length;
@@ -316,14 +313,9 @@ export namespace t {
         return {type: 'array', size, items, length} as Array;
     }
 
-    export type MemberType = Exclude<CompleteType, VariableLengthArray | IncompleteArray>;
-    export function isMemberType(type: Type): type is MemberType {
-        return isComplete(type) && !(type.type === 'array' && type.size === undefined);
-    }
-
     // bit field offsets are represented by fractions
-    export type StructMember = {name: string, type: MemberType, offset: number, bitField?: number} | {name: undefined, type: Struct | Union, offset: number, bitField?: number};
-    export type ParamStructMember = {name: string, type: MemberType, bitField?: number} | {name: undefined, type: Struct | Union, bitField?: number};
+    export type StructMember = {name: string, type: Sized, offset: number, bitField?: number} | {name: undefined, type: Struct | Union, offset: number, bitField?: number} | {name: undefined, type: Void, offset: number, bitField: number};
+    export type ParamStructMember = {name: string, type: Sized, bitField?: number} | {name: undefined, type: Struct | Union, bitField?: number} | {name: undefined, type: undefined, bitField: number};
     export type Struct = BaseObject & {type: 'struct', size: number, tag?: string, members: StructMember[], flexible?: IncompleteArray};
     export function struct(members: ParamStructMember[], flexible?: IncompleteArray, tag?: string): Struct {
         let size = 0;
@@ -340,6 +332,10 @@ export namespace t {
                     i++;
                     let member = Object.assign(structuredClone(members[i]), {offset: 0}) as StructMember;
                     let field = member.bitField;
+                    // empty unnamed bit field means end the current packing unit
+                    if (member.name === undefined && field === 0) {
+                        break;
+                    }
                     if (field === undefined || (bits + field) > 16) {
                         i--;
                         break;
@@ -352,7 +348,9 @@ export namespace t {
                 size = Math.ceil(size);
             } else {
                 member.offset = size;
-                size += member.type.size;
+                if (member.type !== undefined && member.type.type !== 'void') {
+                    size += member.type.size;
+                }
                 outMembers.push(member);
             }
         }
@@ -365,7 +363,7 @@ export namespace t {
         };
     }
 
-    export type UnionMember = {name: string, type: MemberType, bitField?: number} | {name: undefined, type: Struct | Union, bitField?: number};
+    export type UnionMember = {name: string, type: Sized, bitField?: number} | {name: undefined, type: Struct | Union, bitField?: number};
     export type Union = BaseObject & {type: 'union', size: number, tag?: string, members: UnionMember[]};
     export function union(members: UnionMember[], tag?: string): Union {
         let size = 0;
@@ -397,12 +395,11 @@ export namespace t {
     }
 
     export type IncompleteStruct = BaseObject & {type: 'incomplete struct', tag: string};
-
     export type IncompleteUnion = BaseObject & {type: 'incomplete union', tag: string};
-
-    export type IncompleteType = Void | IncompleteArray | IncompleteStruct | IncompleteUnion;
+    export type IncompleteEnum = BaseObject & {type: 'incomplete enum', tag: string};
+    export type IncompleteType = Void | IncompleteArray | IncompleteStruct | IncompleteUnion | IncompleteEnum;
     export function isIncomplete(type: Type): type is IncompleteType {
-        return type.type === 'void' || (type.type === 'array' && type.length === undefined) || type.type === 'incomplete struct' || type.type === 'incomplete union';
+        return type.type === 'void' || (type.type === 'array' && type.length === undefined) || type.type === 'incomplete struct' || type.type === 'incomplete union' || type.type === 'incomplete enum';
     }
 
     export type DerivedDeclarator = Array | Function | Pointer;
@@ -421,6 +418,8 @@ export namespace t {
     }
 
     export type Type = Object | Function;
+    
+    export type Sized = Extract<Type, {size: number}>;
 
     export function const_<T extends Object>(type: T): T {
         type = structuredClone(type);
@@ -452,7 +451,7 @@ export namespace t {
     }
 
     // this is like `isSignedInteger` but works on enums and includes `char`
-    export function isSigned(type: Integer): type is SignedInteger | Char | (Enumerated & {underlying: SignedInteger | Char}) {
+    export function isSigned(type: Integer): type is SignedInteger | Char | (Enum & {underlying: SignedInteger | Char}) {
         if (type.type === 'enum') {
             type = type.underlying;
         }
@@ -460,7 +459,7 @@ export namespace t {
     }
 
     // same as `isUnsignedInteger` but works on enums
-    export function isUnsigned(type: Integer): type is UnsignedInteger | (Enumerated & {underlying: SignedInteger | UnsignedInteger}) {
+    export function isUnsigned(type: Integer): type is UnsignedInteger | (Enum & {underlying: SignedInteger | UnsignedInteger}) {
         if (type.type === 'enum') {
             type = type.underlying;
         }
@@ -548,16 +547,21 @@ export namespace t {
             } else {
                 specifier = `${type.type} {\n`;
                 for (let member of type.members) {
-                    let str = `${toString(member.type, full, identifier)} ${member.name}`;
-                    if (member.bitField !== undefined) {
-                        str += ` : ${member.bitField}`;
+                    let str: string;
+                    if (member.name === undefined && member.type.type === 'void') {
+                        str = `: ${member.bitField}`;
+                    } else {
+                        str = `${toString(member.type, full, identifier)} ${member.name}`;
+                        if (member.bitField !== undefined) {
+                            str += ` : ${member.bitField}`;
+                        }
                     }
                     specifier += `    ${str};\n`;
                 }
                 specifier += `}`;
             }
-        } else if (type.type === 'incomplete struct' || type.type === 'incomplete union') {
-            specifier = `${type.type} ${type.tag}`;
+        } else if (type.type === 'incomplete struct' || type.type === 'incomplete union' || type.type === 'incomplete enum') {
+            specifier = `${type.type.slice(type.type.indexOf(' ') + 1)} ${type.tag}`;
         } else {
             throw new Error(`This error should not occur, please report it (invalid type)`);
         }
@@ -684,6 +688,8 @@ export namespace t {
             return x.tag === y.tag;
         } else if (x.type === 'incomplete union' && y.type === 'incomplete union') {
             return x.tag === y.tag;
+        } else if (x.type === 'incomplete enum' && y.type === 'incomplete enum') {
+            return x.tag === y.tag;
         } else {
             throw new Error(`This error should not occur, please report it (invalid type)`);
         }
@@ -791,6 +797,8 @@ export namespace t {
             return x.tag === y.tag;
         } else if (x.type === 'incomplete union' && y.type === 'incomplete union') {
             return x.tag === y.tag;
+        } else if (x.type === 'incomplete enum' && y.type === 'incomplete enum') {
+            return x.tag === y.tag;
         } else {
             throw new Error(`This error should not occur, please report it (invalid type)`);
         }
@@ -809,7 +817,7 @@ export namespace t {
             }
             return copyQualifiers(x, pointer(type));
         } else if (x.type === 'array' && y.type === 'array') {
-            let length: number | undefined | '*' | a.Expression;
+            let length: number | undefined | '*' | Address;
             if (x.length === undefined) {
                 length = y.length;
             } else if (y.length === undefined) {
@@ -829,7 +837,7 @@ export namespace t {
             for (let i = 0; i < x.members.length; i++) {
                 let member = x.members[i];
                 let type = createComposite(member.type, y.members[i].type);
-                if (!type || !isMemberType(type)) {
+                if (!type || !('size' in type)) {
                     throw new Error(`This error should not occur, please report it (typesAreCompatible is broken)`);
                 }
                 members.push({name: member.name, type, bitField: member.bitField} as ParamStructMember);
@@ -848,7 +856,7 @@ export namespace t {
             for (let i = 0; i < x.members.length; i++) {
                 let member = x.members[i];
                 let type = createComposite(member.type, y.members[i].type);
-                if (!type || !isMemberType(type)) {
+                if (!type || !('size' in type)) {
                     throw new Error(`This error should not occur, please report it (typesAreCompatible is broken)`);
                 }
                 members.push({name: member.name, type, bitField: member.bitField} as UnionMember);
@@ -857,6 +865,8 @@ export namespace t {
         } else if (x.type === 'incomplete struct' && y.type === 'incomplete struct') {
             return x;
         } else if (x.type === 'incomplete union' && y.type === 'incomplete union') {
+            return x;
+        } else if (x.type === 'incomplete enum' && y.type === 'incomplete enum') {
             return x;
         } else {
             throw new Error(`This error should not occur, please report it (invalid type)`);
@@ -907,7 +917,7 @@ export namespace t {
             return type;
         } else if (type.type === 'char' || type.type === 'signed char' || type.type === 'short int') {
             return INT;
-        } else if (type.type === 'unsigned char' || type.type === 'unsigned short int') {
+        } else if (type.type === 'bool' || type.type === 'unsigned char' || type.type === 'unsigned short int') {
             return UNSIGNED_INT;
         } else {
             return type;
@@ -954,8 +964,19 @@ export namespace t {
 export type Type = t.Type;
 
 
+export interface Address {
+    type: 'static' | 'local' | 'arg';
+    value: number | string;
+}
+
+export type Linkage = 'external' | 'internal' | 'none';
+export type StorageDuration = 'auto' | 'static' | 'thread';
+
 export interface VariableData {
     type: Type;
+    address: Address;
+    linkage: Linkage;
+    duration: StorageDuration;
 }
 
 export class Scope {
@@ -964,14 +985,18 @@ export class Scope {
     parent: Scope | undefined;
     variables: Map<string, VariableData>;
     typedefs: Map<string, Type>;
-    labels: Map<string, a.Statement>;
+    structTags: Map<string, t.Struct>;
+    unionTags: Map<string, t.Union>;
+    enumTags: Map<string, t.Enum>;
 
     constructor(isTopOfFunction: boolean, parent?: Scope) {
         this.isTopOfFunction = isTopOfFunction;
         this.parent = parent;
         this.variables = new Map();
         this.typedefs = new Map();
-        this.labels = new Map();
+        this.structTags = new Map();
+        this.unionTags = new Map();
+        this.enumTags = new Map();
     }
 
     getVariable(name: string): VariableData | undefined {
@@ -989,24 +1014,6 @@ export class Scope {
         this.variables.set(name, value);
     }
 
-    getLabel(name: string): a.Statement | undefined {
-        if (this.isTopOfFunction) {
-            let value = this.labels.get(name);
-            if (value) {
-                return value;
-            }
-        }
-        if (this.parent) {
-            return this.parent.getLabel(name);
-        } else {
-            return undefined;
-        }
-    }
-
-    setLabel(name: string, value: a.Statement): void {
-        this.labels.set(name, value);
-    }
-
     getTypedef(name: string): Type | undefined {
         let value = this.typedefs.get(name);
         if (value) {
@@ -1022,103 +1029,259 @@ export class Scope {
         this.typedefs.set(name, value);
     }
 
-}
-
-
-export namespace a {
-
-    export type BaseNode = {pos: Position};
-
-    export type BaseExpression = BaseNode & {exprType: Type};
-
-    // primary
-    export type IdentifierExpression = BaseExpression & {type: 'identifier-expression', name: string, variable: VariableData};
-    export type IntegerConstant = BaseExpression & {type: 'integer-constant', value: bigint};
-    export type FloatingConstant = BaseExpression & {type: 'floating-constant', value: number};
-    export type CharacterConstant = BaseExpression & {type: 'character-constant', value: number};
-    export type BooleanConstant = BaseExpression & {type: 'boolean-constant', value: boolean};
-    export type NullptrConstant = BaseExpression & {type: 'nullptr-constant'};
-    export type StringLiteral = BaseExpression & {type: 'string-literal', value: number[]};
-    export type GenericSelectionExpression = BaseExpression & {type: 'generic-selection'};
-
-    // postfix
-    export type IndexExpression = BaseExpression & {type: 'index-expression', value: Expression, index: Expression};
-    export type FunctionCallExpression = BaseExpression & {type: 'function-call-expression', func: Expression, args: Expression[]};
-    export type MemberExpression = BaseExpression & {type: 'member-expression', value: Expression, op: '.' | '->', member: IdentifierExpression, isBitField: boolean};
-    export type ArithmeticPostfixExpression = BaseExpression & {type: 'arithmetic-postfix-expression', op: '++' | '--', value: Expression};
-    // todo: finish
-    export type CompoundLiteral = BaseExpression & {type: 'compound-literal'};
-
-    // unary
-    export type ArithmeticUnaryExpression = BaseExpression & {type: 'arithmetic-unary-expression', op: '++' | '--', value: Expression};
-    export type BasicUnaryExpression = BaseExpression & {type: 'basic-unary-expression', op: '&' | '*' | '+' | '-' | '~' | '!', value: Expression};
-    export type SizeofValueExpression = BaseExpression & {type: 'sizeof-value-expression', value: Expression};
-    export type SizeofTypeExpression = BaseExpression & {type: 'sizeof-type-expression', value: TypeName};
-    export type AlignofExpression = BaseExpression & {type: 'alignof-expression', value: TypeName};
-    export type CastExpression = BaseExpression & {type: 'cast-expression', castTo: Type | TypeName, value: Expression};
-
-    // arithmetic
-    export type MultiplicativeExpression = BaseExpression & {type: 'multiplicative-expression', op: '*' | '/' | '%', left: Expression, right: Expression};
-    export type AdditiveExpression = BaseExpression & {type: 'additive-expression', op: '+' | '-', left: Expression, right: Expression};
-    export type ShiftExpression = BaseExpression & {type: 'shift-expression', op: '<<' | '>>', left: Expression, right: Expression};
-
-    // comparison
-    export type RelationalExpression = BaseExpression & {type: 'relational-expression', op: '<' | '>' | '<=' | '>=', left: Expression, right: Expression};
-    export type EqualityExpression = BaseExpression & {type: 'equality-expression', op: '==' | '!=', left: Expression, right: Expression};
-
-    // bitwise/logical
-    export type BitwiseANDExpression = BaseExpression & {type: 'bitwise-and-expression', left: Expression, right: Expression};
-    export type BitwiseXORExpression = BaseExpression & {type: 'bitwise-xor-expression', left: Expression, right: Expression};
-    export type BitwiseORExpression = BaseExpression & {type: 'bitwise-or-expression', left: Expression, right: Expression};
-    export type LogicalANDExpression = BaseExpression & {type: 'logical-and-expression', left: Expression, right: Expression};
-    export type LogicalORExpression = BaseExpression & {type: 'logical-or-expression', left: Expression, right: Expression};
-    export type ConditionalExpression = BaseExpression & {type: 'conditional-expression', condition: Expression, true: Expression, false: Expression};
-
-    // misc
-    export type AssignmentExpression = BaseExpression & {type: 'conditional-expression', op: '=' | '*=' | '/=' | '%=' | '+=' | '-=' | '<<=' | '>>=' | '&=' | '^=' | '|=', lvalue: Expression, rvalue: Expression};
-    export type CommaExpression = BaseExpression & {type: 'comma-expression', left: Expression, right: AssignmentExpression};
-
-    export type Expression = IdentifierExpression | IntegerConstant | FloatingConstant | CharacterConstant | BooleanConstant | NullptrConstant | StringLiteral | GenericSelectionExpression | IndexExpression | FunctionCallExpression | MemberExpression | ArithmeticPostfixExpression | CompoundLiteral | ArithmeticUnaryExpression | BasicUnaryExpression | SizeofValueExpression | SizeofTypeExpression | AlignofExpression | CastExpression | MultiplicativeExpression | AdditiveExpression | ShiftExpression | RelationalExpression | EqualityExpression | BitwiseANDExpression | BitwiseXORExpression | BitwiseORExpression | LogicalANDExpression | LogicalORExpression | ConditionalExpression | AssignmentExpression | CommaExpression;
-
-    export type IntegerExpression = Expression & {exprType: t.Integer};
-    export function isIntegerExpression(value: Expression): value is IntegerExpression {
-        return t.isInteger(value.exprType);
-    }
-
-    export type Lvalue = (IdentifierExpression | MemberExpression | IndexExpression | (CastExpression & {value: Lvalue}) | (BasicUnaryExpression & {op: '*'})) & {exprType: t.Object};
-
-    export function isLvalue(value: Expression): value is Lvalue {
-        if (!(t.isObject(value.exprType) && t.isComplete(value.exprType))) {
-            return false;
-        }
-        return Boolean(false
-            || value.type === 'identifier-expression'
-            || value.type === 'member-expression'
-            || value.type === 'index-expression'
-            || (value.type === 'cast-expression' && isLvalue(value.value))
-            || (value.type === 'basic-unary-expression' && value.op === '*')
-        );
-    }
-
-    export function isModifiableLvalue(value: Expression): boolean {
-        return isLvalue(value) && !value.exprType.const;
-    }
-
-    export function isBitField(value: Expression): boolean {
-        if (value.type === 'member-expression') {
-            return value.isBitField;
-        } else if (value.type === 'cast-expression') {
-            return isBitField(value.value);
+    getStructTag(name: string): t.Struct | undefined {
+        let value = this.structTags.get(name);
+        if (value) {
+            return value;
+        } else if (this.parent) {
+            return this.parent.getStructTag(name);
         } else {
-            return false;
+            return undefined;
         }
     }
 
-    export type ExpressionStatement = BaseExpression & {type: 'expression-statement', value: Expression};
-    export type Statement = ExpressionStatement;
-    
-    export type TypeName = BaseNode & {type: 'type-name', typeType: Type};
+    setStructTag(name: string, value: t.Struct): void {
+        this.structTags.set(name, value);
+    }
 
-    export type Node = Expression | Statement | TypeName;
+    getUnionTag(name: string): t.Union | undefined {
+        let value = this.unionTags.get(name);
+        if (value) {
+            return value;
+        } else if (this.parent) {
+            return this.parent.getUnionTag(name);
+        } else {
+            return undefined;
+        }
+    }
+
+    setUnionTag(name: string, value: t.Union): void {
+        this.unionTags.set(name, value);
+    }
+
+    getEnumTag(name: string): t.Enum | undefined {
+        let value = this.enumTags.get(name);
+        if (value) {
+            return value;
+        } else if (this.parent) {
+            return this.parent.getEnumTag(name);
+        } else {
+            return undefined;
+        }
+    }
+
+    setEnumTag(name: string, value: t.Enum): void {
+        this.enumTags.set(name, value);
+    }
 
 }
+
+
+export class Code {
+
+    [Symbol.isConcatSpreadable]: true = true;
+    static get [Symbol.species](): typeof Code {
+        return this;
+    }
+
+    data: string[];
+
+    constructor(...data: (string | Iterable<string>)[]) {
+        this.data = [];
+        for (let value of data) {
+            if (typeof value === 'string') {
+                this.data.push(value);
+            } else {
+                for (let line of value) {
+                    this.data.push(line);
+                }
+            }
+        }
+    }
+
+    [Symbol.iterator](): IterableIterator<string> {
+        let pos = 0;
+        return {
+            [Symbol.iterator]() {
+                return this;
+            },
+            // arrow function to use the outer scope `this`
+            next: () => {
+                if (pos >= this.data.length) {
+                    return {done: true, value: undefined};
+                } else {
+                    let out = {done: false, value: this.data[pos]};
+                    pos++;
+                    return out;
+                }
+            },
+        };
+    }
+
+    copy(): Code {
+        return new Code(this);
+    }
+
+    push(...data: (string | Iterable<string>)[]): this {
+        for (let value of data) {
+            if (typeof value === 'string') {
+                this.data.push(value);
+            } else {
+                for (let line of value) {
+                    this.data.push(line);
+                }
+            }
+        }
+        return this;
+    }
+
+}
+
+export type CodeTemplateParameter = string | Iterable<string> | number | bigint;
+
+export function code(strings: TemplateStringsArray, ...values: CodeTemplateParameter[]): Code {
+    let value = String.raw({raw: strings}, ...values.map(value => {
+        if (typeof value === 'string') {
+            return value;
+        } else if (typeof value === 'object') {
+            return Array.from(value).join('\n');
+        } else {
+            return String(value);
+        }
+    }));
+    return new Code(value.split('\n'));
+}
+
+
+// export namespace a {
+
+//     export type BaseNode = {pos: Position};
+//     export type Identifier = BaseNode & {type: 'identifier', scope: Scope, name: string};
+//     export type Ellipsis = BaseNode & {type: 'ellipsis'};
+
+//     export type BaseExpression = BaseNode;
+
+//     // primary
+//     export type IdentifierExpression = BaseExpression & {type: 'identifier-expression', identifier: Identifier};
+//     export type IntegerLiteral = BaseExpression & {type: 'integer-literal', value: bigint, valueType: t.Integer};
+//     export type FloatingLiteral = BaseExpression & {type: 'floating-literal', value: number, valueType: t.Floating};
+//     export type BooleanLiteral = BaseExpression & {type: 'boolean-literal', value: boolean};
+//     export type NullptrLiteral = BaseExpression & {type: 'nullptr-literal'};
+//     export type StringLiteral = BaseExpression & {type: 'string-literal', value: number[], valueType: t.Array & {items: t.Integer}};
+//     export type GenericSelectionExpression = BaseExpression & {type: 'generic-selection'};
+
+//     // postfix
+//     export type IndexExpression = BaseExpression & {type: 'index-expression', value: Expression, index: Expression};
+//     export type FunctionCallExpression = BaseExpression & {type: 'function-call-expression', func: Expression, args: Expression[]};
+//     export type MemberExpression = BaseExpression & {type: 'member-expression', value: Expression, op: '.' | '->', member: Identifier};
+//     export type ArithmeticPostfixExpression = BaseExpression & {type: 'arithmetic-postfix-expression', op: '++' | '--', value: Lvalue};
+//     // todo: finish
+//     export type CompoundLiteral = BaseExpression & {type: 'compound-literal'};
+
+//     // unary
+//     export type ArithmeticUnaryExpression = BaseExpression & {type: 'arithmetic-unary-expression', op: '++' | '--', value: Lvalue};
+//     export type BasicUnaryExpression = BaseExpression & {type: 'basic-unary-expression', op: '&' | '*' | '+' | '-' | '~' | '!', value: Expression};
+//     export type CountofValueExpression = BaseExpression & {type: 'countof-value-expression', value: Expression};
+//     export type CountofTypeExpression = BaseExpression & {type: 'countof-type-expression', value: TypeName};
+//     export type SizeofValueExpression = BaseExpression & {type: 'sizeof-value-expression', value: Expression};
+//     export type SizeofTypeExpression = BaseExpression & {type: 'sizeof-type-expression', value: TypeName};
+//     export type AlignofExpression = BaseExpression & {type: 'alignof-expression', value: TypeName};
+//     export type StaticAssertionExpression = BaseExpression & {type: 'static-assertion-expression', value: Expression, message: StringLiteral | undefined};
+//     export type CastExpression = BaseExpression & {type: 'cast-expression', castTo: Type | TypeName, value: Expression};
+
+//     // arithmetic
+//     export type MultiplicativeExpression = BaseExpression & {type: 'multiplicative-expression', op: '*' | '/' | '%', left: Expression, right: Expression};
+//     export type AdditiveExpression = BaseExpression & {type: 'additive-expression', op: '+' | '-', left: Expression, right: Expression};
+//     export type ShiftExpression = BaseExpression & {type: 'shift-expression', op: '<<' | '>>', left: Expression, right: Expression};
+
+//     // comparison
+//     export type RelationalExpression = BaseExpression & {type: 'relational-expression', op: '<' | '>' | '<=' | '>=', left: Expression, right: Expression};
+//     export type EqualityExpression = BaseExpression & {type: 'equality-expression', op: '==' | '!=', left: Expression, right: Expression};
+
+//     // bitwise/logical
+//     export type BitwiseExpression = BaseExpression & {type: 'bitwise-expression', op: '&' | '^' | '|', left: Expression, right: Expression};
+//     export type LogicalExpression = BaseExpression & {type: 'logical-expression', op: '&&' | '||', left: Expression, right: Expression};
+//     export type ConditionalExpression = BaseExpression & {type: 'conditional-expression', condition: Expression, ifTrue: Expression, ifFalse: Expression};
+
+//     // misc
+//     export type AssignmentExpression = BaseExpression & {type: 'assignment-expression', op: '=' | '*=' | '/=' | '%=' | '+=' | '-=' | '<<=' | '>>=' | '&=' | '^=' | '|=', left: Lvalue, right: Expression};
+//     export type CommaExpression = BaseExpression & {type: 'comma-expression', left: Expression, right: Expression};
+
+//     export type Expression = IdentifierExpression | IntegerLiteral | FloatingLiteral | BooleanLiteral | NullptrLiteral | StringLiteral | GenericSelectionExpression | IndexExpression | FunctionCallExpression | MemberExpression | ArithmeticPostfixExpression | CompoundLiteral | ArithmeticUnaryExpression | BasicUnaryExpression | CountofValueExpression | CountofTypeExpression | SizeofValueExpression | SizeofTypeExpression | AlignofExpression | StaticAssertionExpression | CastExpression | MultiplicativeExpression | AdditiveExpression | ShiftExpression | RelationalExpression | EqualityExpression | BitwiseExpression | LogicalExpression | ConditionalExpression | AssignmentExpression | CommaExpression;
+
+//     export type Lvalue = (IdentifierExpression | MemberExpression | IndexExpression | (CastExpression & {value: Lvalue}) | (BasicUnaryExpression & {op: '*'}));
+
+//     export function isLvalue(value: Expression): value is Lvalue {
+//         while (value.type === 'cast-expression') {
+//             value = value.value;
+//         }
+//         return Boolean(false
+//             || value.type === 'identifier-expression'
+//             || value.type === 'member-expression'
+//             || value.type === 'index-expression'
+//             || (value.type === 'basic-unary-expression' && value.op === '*')
+//         );
+//     }
+
+//     export type Range = BaseNode & {type: 'range', start: Expression, end: Expression};
+
+//     export type Attribute = BaseNode & {type: 'attribute'};
+
+//     export type StorageSpecifierKeyword = 'auto' | 'constexpr' | 'extern' | 'register' | 'static' | 'thread_local' | 'typedef';
+//     export type StorageSpecifier = BaseNode & {type: 'storage-specifier', value: StorageSpecifierKeyword};
+//     export type TypeTypeSpecifierKeyword = 'void' | 'char' | 'short' | 'int' | 'long' | 'float' | 'double' | 'signed' | 'unsigned' | '_BitInt' | 'bool' | '_Complex' | '_Decimal32' | '_Decimal64' | '_Decimal128';
+//     export type TypeTypeSpecifier = BaseNode & {type: 'type-type-specifier', value: TypeTypeSpecifierKeyword};
+//     export type AtomicSpecifier = BaseNode & {type: 'atomic-specifier', value: TypeName};
+//     export type StructOrUnionMemberDeclarator = BaseNode & {type: 'struct-or-union-member-declarator', declarator: Declarator, bitField?: Expression};
+//     export type StructOrUnionMember = BaseNode & {type: 'struct-or-union-member', attributes?: Attribute[], specifiers: DeclarationSpecifier[], declarators: StructOrUnionMemberDeclarator[]};
+//     export type StructOrUnionSpecifier = BaseNode & {type: 'struct-or-union-specifier', structOrUnion: 'struct' | 'union', attributes?: Attribute[], tag?: Identifier, members?: StructOrUnionMember[]};
+//     export type EnumMember = BaseNode & {type: 'enum-member', attributes?: Attribute[]};
+//     export type EnumSpecifier = BaseNode & {type: 'enum-specifier', attributes?: Attribute[], tag?: Identifier, underlying?: TypeSpecifier[], members?: EnumMember[]};
+//     export type TypedefNameSpecifier = BaseNode & {type: 'typedef-name-specifier', id: Identifier};
+//     export type TypeofExpressionSpecifier = BaseNode & {type: 'typeof-expression-specifier', unqual: boolean, value: Expression};
+//     export type TypeofTypeSpecifier = BaseNode & {type: 'typeof-type-specifier', unqual: boolean, value: TypeName};
+//     export type TypeSpecifier = StorageSpecifier | TypeTypeSpecifier | AtomicSpecifier | StructOrUnionSpecifier | EnumSpecifier | TypedefNameSpecifier | TypeofExpressionSpecifier | TypeofTypeSpecifier;
+//     export type TypeQualifierKeyword = 'const' | 'restrict' | 'volatile' | '_Atomic';
+//     export type TypeQualifier = BaseNode & {type: 'type-qualifier', value: TypeQualifierKeyword};
+//     export type FunctionSpecifierKeyword = 'inline' | '_Noreturn';
+//     export type FunctionSpecifier = BaseNode & {type: 'function-specifier', value: FunctionSpecifierKeyword};
+//     export type TypeAlignmentSpecifier = BaseNode & {type: 'type-alignment-specifier', value: TypeName};
+//     export type ValueAlignmentSpecifier = BaseNode & {type: 'value-alignment-specifier', value: Expression};
+//     export type AlignmentSpecifier = TypeAlignmentSpecifier | ValueAlignmentSpecifier;
+//     export type DeclarationSpecifier = TypeSpecifier | TypeQualifier | FunctionSpecifier | AlignmentSpecifier;
+
+//     export type IdentifierDeclarator = BaseNode & {type: 'identifier-declarator', identifier: Identifier, attributes?: Attribute[]};
+//     export type PointerDeclarator = BaseNode & {type: 'pointer-declarator', value: Declarator, qualifiers: TypeQualifier[], attributes?: Attribute[]};
+//     export type ArrayDeclarator = BaseNode & {type: 'array-declarator', items: Declarator, static: boolean, qualifiers: TypeQualifier[], length: Expression | '*'};
+//     export type ParameterDeclaration = BaseNode & {type: 'parameter-declaration', attributes?: Attribute[], specifiers: DeclarationSpecifier[], declarator?: Declarator | AbstractDeclarator};
+//     export type FunctionDeclarator = BaseNode & {type: 'function-declarator', returnType: Declarator, params: ParameterDeclaration[], variadic?: Ellipsis};
+//     export type Declarator = IdentifierDeclarator | PointerDeclarator | ArrayDeclarator | FunctionDeclarator;
+//     export type ArrayDesignator = BaseNode & {type: 'array-designator', index: Expression};
+//     export type MemberDesignator = BaseNode & {type: 'member-designator', identifier: Identifier};
+//     export type Designator = ArrayDesignator | MemberDesignator;
+//     export type InitializerItem = BaseNode & {type: 'initializer-item', location?: Designator[], value: Initializer};
+//     export type BracedInitializer = BaseNode & {type: 'braced-initializer', data: InitializerItem[]};
+//     export type Initializer = BracedInitializer | Expression;
+//     export type InitDeclarator = BaseNode & {type: 'init-declarator', declarator: Declarator, initializer?: Initializer};
+
+//     export type BasicDeclaration = BaseNode & {type: 'basic-declaration', specifiers: DeclarationSpecifier[], declarators: InitDeclarator[]};
+//     export type StaticAssertionDeclaration = BaseNode & {type: 'static-assertion-declaration', value: Expression, message: StringLiteral | undefined};
+//     // todo: finish
+//     export type AttributeDeclaration = BaseNode & {type: 'attribute-declaration', data: Attribute[]};
+//     export type Declaration = BasicDeclaration | StaticAssertionDeclaration | AttributeDeclaration;
+
+//     export type ExpressionStatement = BaseExpression & {type: 'expression-statement', value: Expression};
+//     export type Statement = ExpressionStatement;
+    
+//     export type AbstractDeclarator = never;
+//     export type TypeName = never;
+
+//     export type Node = 
+//         | Identifier | Ellipsis
+//         | Expression | Range
+//         | StructOrUnionMember | EnumMember | DeclarationSpecifier | ParameterDeclaration | Declarator | Designator | InitializerItem | BracedInitializer | InitDeclarator | Declaration
+//         | Statement
+//         | TypeName
+//     ;
+
+// }
